@@ -1,13 +1,19 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Users, Settings, Calendar } from "lucide-react";
 import { useGroups } from "@/hooks/useGroups";
 import { CreateGroupDialog } from "@/components/CreateGroupDialog";
+import { useState } from "react";
+import { GroupCalendarDialog } from "@/components/GroupCalendarDialog";
+import { GroupTeamCalendarScreen } from "@/components/GroupTeamCalendarScreen";
+import { useNavigate } from "react-router-dom";
 
 export const GroupManagement = () => {
   const { groups, isLoading, createGroup, isCreating } = useGroups();
+  const [selectedGroup, setSelectedGroup] = useState<any | null>(null);
+  const [showTeamCalendar, setShowTeamCalendar] = useState(false);
+  const navigate = useNavigate();
 
   if (isLoading) {
     return (
@@ -42,6 +48,15 @@ export const GroupManagement = () => {
     );
   }
 
+  if (showTeamCalendar && selectedGroup) {
+    return (
+      <GroupTeamCalendarScreen
+        group={selectedGroup}
+        onBack={() => { setShowTeamCalendar(false); setSelectedGroup(null); }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -66,7 +81,11 @@ export const GroupManagement = () => {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {groups.map((group) => (
-            <Card key={group.id} className="hover:shadow-lg transition-shadow cursor-pointer">
+            <Card
+              key={group.id}
+              className="hover:shadow-lg transition-shadow cursor-pointer"
+              onClick={() => navigate(`/team/${group.id}`)}
+            >
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className={`w-4 h-4 rounded-full ${group.color}`} />
@@ -103,6 +122,13 @@ export const GroupManagement = () => {
             </Card>
           ))}
         </div>
+      )}
+      {selectedGroup && (
+        <GroupCalendarDialog
+          open={!!selectedGroup}
+          onOpenChange={(open) => !open && setSelectedGroup(null)}
+          group={selectedGroup}
+        />
       )}
     </div>
   );

@@ -1,73 +1,37 @@
-# Welcome to your Lovable project
+```markdown
+# Orchestr
 
-## Project info
+## AI-Powered Conflict-Free Group Scheduling
 
-**URL**: https://lovable.dev/projects/d20ce642-379b-4969-b3f3-811605de521e
+---
 
-## How can I edit this code?
+## 🚀 Overview
 
-There are several ways of editing your application.
+**IntelliSchedule** is an innovative web application designed to eliminate the stress and manual effort of coordinating group activities. Leveraging advanced AI, it intelligently finds, suggests, and books the best times for any group — be it your family, social circle, or small team. Say goodbye to endless back-and-forth messages; simply ask the AI, and it handles the rest.
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/d20ce642-379b-4969-b3f3-811605de521e) and start prompting.
+## ✨ Features (MVP)
 
-Changes made via Lovable will be committed automatically to this repo.
+* **Natural Language AI Scheduling:** Simply type your scheduling needs in plain English (e.g., "What time is everyone free for dinner on Monday?", "Schedule a 30-min meeting for the team next Tuesday morning"). Our AI understands your intent and processes the request.
+* **Conflict Resolution:** The AI automatically checks all linked calendars for relevant group members, identifies conflicts, and proposes optimal available times.
+* **Automated Event Creation:** Upon confirmation, the AI creates the event and adds it to the calendars of all participants.
+* **Group Management:** Easily create and manage groups (e.g., "Family," "Book Club," "Project Team") and invite members.
+* **User Accounts & Profiles:** Secure login and personalized profiles to manage your calendar connections and preferences.
+* **Notifications:** Stay informed with in-app notifications and email reminders for upcoming events and scheduling updates.
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 🤝 Contributing
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+We welcome contributions! Please see `CONTRIBUTING.md` (to be created) for details on how to contribute to the project.
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## 📄 License
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+This project is licensed under the MIT License - see the `LICENSE` file for details.
 
-# Step 3: Install the necessary dependencies.
-npm i
+---
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
 ```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/d20ce642-379b-4969-b3f3-811605de521e) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
