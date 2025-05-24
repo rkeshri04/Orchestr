@@ -1,17 +1,25 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Users, Clock, Sparkles, ArrowRight, Check } from "lucide-react";
+import { Calendar, Users, Clock, Sparkles, ArrowRight, Check, LogOut } from "lucide-react";
 import { AuthModal } from "@/components/AuthModal";
-import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 const Index = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
-  const { toast } = useToast();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect to dashboard if user is logged in
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   const features = [
     {
@@ -52,6 +60,10 @@ const Index = () => {
     setShowAuthModal(true);
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
@@ -66,12 +78,24 @@ const Index = () => {
             </span>
           </div>
           <div className="flex items-center space-x-4">
-            <Button variant="ghost" onClick={handleSignIn}>
-              Sign In
-            </Button>
-            <Button onClick={handleGetStarted} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
-              Get Started
-            </Button>
+            {user ? (
+              <>
+                <span className="text-sm text-gray-600">Welcome, {user.email}</span>
+                <Button variant="ghost" onClick={handleSignOut}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" onClick={handleSignIn}>
+                  Sign In
+                </Button>
+                <Button onClick={handleGetStarted} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
+                  Get Started
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>

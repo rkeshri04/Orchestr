@@ -4,10 +4,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Calendar, Mail, Lock, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -22,33 +22,67 @@ export const AuthModal = ({ isOpen, onClose, mode, onModeSwitch }: AuthModalProp
   const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate authentication
-    setTimeout(() => {
+    try {
+      let result;
+      if (mode === 'login') {
+        result = await signIn(email, password);
+      } else {
+        result = await signUp(email, password, name);
+      }
+
+      if (result.error) {
+        toast({
+          title: "Error",
+          description: result.error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: mode === 'login' ? "Welcome back!" : "Account created!",
+          description: mode === 'login' 
+            ? "You've been successfully signed in." 
+            : "Your account has been created successfully.",
+        });
+        onClose();
+        // Reset form
+        setEmail("");
+        setPassword("");
+        setName("");
+      }
+    } catch (error: any) {
       toast({
-        title: mode === 'login' ? "Welcome back!" : "Account created!",
-        description: mode === 'login' 
-          ? "You've been successfully signed in." 
-          : "Your account has been created successfully.",
+        title: "Error",
+        description: error.message || "An unexpected error occurred",
+        variant: "destructive",
       });
+    } finally {
       setIsLoading(false);
-      onClose();
-      // Reset form
-      setEmail("");
-      setPassword("");
-      setName("");
-    }, 1500);
+    }
   };
 
-  const handleGoogleAuth = () => {
-    toast({
-      title: "Google Authentication",
-      description: "Google sign-in will be available soon!",
-    });
+  const handleGoogleAuth = async () => {
+    try {
+      const { error } = await signInWithGoogle();
+      if (error) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Google authentication failed",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
