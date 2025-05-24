@@ -25,24 +25,35 @@ export const useGroups = () => {
     queryFn: async () => {
       if (!user) return [];
       
-      const { data, error } = await supabase
+      // First get groups with member counts
+      const { data: groupsData, error: groupsError } = await supabase
         .from('groups')
         .select(`
           *,
-          group_members!inner(count),
-          events(count)
+          group_members(count)
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (groupsError) throw groupsError;
 
-      return data.map(group => ({
-        ...group,
-        member_count: group.group_members?.[0]?.count || 0,
-        upcoming_events: group.events?.filter(event => 
-          new Date(event.start_time) > new Date()
-        ).length || 0
-      }));
+      // Then get event counts for each group
+      const groupsWithCounts = await Promise.all(
+        groupsData.map(async (group) => {
+          const { count: eventCount } = await supabase
+            .from('events')
+            .select('*', { count: 'exact', head: true })
+            .eq('group_id', group.id)
+            .gte('start_time', new Date().toISOString());
+
+          return {
+            ...group,
+            member_count: group.group_members?.[0]?.count || 0,
+            upcoming_events: eventCount || 0
+          };
+        })
+      );
+
+      return groupsWithCounts;
     },
     enabled: !!user
   });
