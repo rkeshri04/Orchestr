@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -51,7 +50,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signUp = async (email: string, password: string, name?: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -60,6 +59,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         },
       },
     });
+
+    // If signup was successful and we have a user, create the profile
+    if (!error && data.user) {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: data.user.id,
+          email: email,
+          full_name: name || null,
+          avatar_url: null,
+          preferences: {},
+        });
+
+      if (profileError) {
+        console.error('Error creating profile:', profileError);
+        // Note: We still return the original auth error (if any) since the user was created successfully
+      }
+    }
+
     return { error };
   };
 
@@ -91,6 +109,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     </AuthContext.Provider>
   );
 };
+AuthProvider.displayName = "AuthProvider";
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -99,3 +118,4 @@ export const useAuth = () => {
   }
   return context;
 };
+// NOTE: If you change export type (default ↔ named), always restart the dev server to avoid Vite HMR issues.
