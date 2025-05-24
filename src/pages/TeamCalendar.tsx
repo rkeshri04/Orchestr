@@ -91,9 +91,24 @@ export default function TeamCalendarPage() {
     return date < today;
   };
 
-  // Handle mouse events for drag selection - only allow for future dates
+  // Helper to check if a time slot already has unavailability for current user
+  const hasUnavailabilityAtHour = (hour: number): boolean => {
+    if (!user?.id) return false;
+    
+    return availabilities.some(unavailability => {
+      if (unavailability.user_id !== user.id) return false;
+      
+      const startHour = Math.floor(timeToDecimal(unavailability.start_time));
+      const endHour = Math.ceil(timeToDecimal(unavailability.end_time));
+      
+      return hour >= startHour && hour < endHour;
+    });
+  };
+
+  // Handle mouse events for drag selection - only allow for future dates and free time slots
   const handleGridMouseDown = (e: React.MouseEvent, hour: number) => {
     if (isPastDate(selectedDate)) return; // Prevent dragging on past dates
+    if (hasUnavailabilityAtHour(hour)) return; // Prevent dragging over existing unavailability
     
     console.log("Mouse down on hour:", hour);
     setDragStart(hour);
@@ -102,6 +117,7 @@ export default function TeamCalendarPage() {
   
   const handleGridMouseEnter = (e: React.MouseEvent, hour: number) => {
     if (isPastDate(selectedDate)) return; // Prevent dragging on past dates
+    if (hasUnavailabilityAtHour(hour)) return; // Prevent dragging over existing unavailability
     
     if (dragStart !== null) {
       console.log("Mouse enter on hour:", hour);
@@ -280,24 +296,32 @@ export default function TeamCalendarPage() {
                   >
                     {/* 24h grid with drag handlers */}
                     <div className="absolute left-0 top-0 w-full h-full grid grid-rows-24 border-r">
-                      {[...Array(24)].map((_, h) => (
-                        <div
-                          key={h}
-                          className={`border-b border-dashed border-gray-200 text-xs text-gray-400 pl-2 flex items-center h-[50px] ${
-                            isPastDate(selectedDate) 
-                              ? 'cursor-not-allowed' 
-                              : 'cursor-pointer'
-                          } ${
-                            !isPastDate(selectedDate) && dragStart !== null && dragEnd !== null && h >= Math.min(dragStart, dragEnd) && h <= Math.max(dragStart, dragEnd)
-                              ? 'bg-blue-100/70'
-                              : ''
-                          }`}
-                          onMouseDown={e => handleGridMouseDown(e, h)}
-                          onMouseEnter={e => handleGridMouseEnter(e, h)}
-                        >
-                          {h}:00
-                        </div>
-                      ))}
+                      {[...Array(24)].map((_, h) => {
+                        const hasCurrentUserUnavailability = hasUnavailabilityAtHour(h);
+                        
+                        return (
+                          <div
+                            key={h}
+                            className={`border-b border-dashed border-gray-200 text-xs text-gray-400 pl-2 flex items-center h-[50px] ${
+                              isPastDate(selectedDate) || hasCurrentUserUnavailability
+                                ? 'cursor-not-allowed' 
+                                : 'cursor-pointer'
+                            } ${
+                              hasCurrentUserUnavailability
+                                ? 'bg-gray-100/50'
+                                : ''
+                            } ${
+                              !isPastDate(selectedDate) && !hasCurrentUserUnavailability && dragStart !== null && dragEnd !== null && h >= Math.min(dragStart, dragEnd) && h <= Math.max(dragStart, dragEnd)
+                                ? 'bg-blue-100/70'
+                                : ''
+                            }`}
+                            onMouseDown={e => handleGridMouseDown(e, h)}
+                            onMouseEnter={e => handleGridMouseEnter(e, h)}
+                          >
+                            {h}:00
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Show overlay message for past dates */}

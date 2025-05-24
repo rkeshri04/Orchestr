@@ -7,11 +7,13 @@ import { CreateGroupDialog } from "@/components/CreateGroupDialog";
 import { useState } from "react";
 import { GroupCalendarDialog } from "@/components/GroupCalendarDialog";
 import { GroupTeamCalendarScreen } from "@/components/GroupTeamCalendarScreen";
+import { GroupSettingsDialog } from "@/components/GroupSettingsDialog";
 import { useNavigate } from "react-router-dom";
 
 export const GroupManagement = () => {
   const { groups, isLoading, createGroup, isCreating } = useGroups();
   const [selectedGroup, setSelectedGroup] = useState<any | null>(null);
+  const [selectedGroupForSettings, setSelectedGroupForSettings] = useState<any | null>(null);
   const [showTeamCalendar, setShowTeamCalendar] = useState(false);
   const navigate = useNavigate();
 
@@ -89,7 +91,14 @@ export const GroupManagement = () => {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className={`w-4 h-4 rounded-full ${group.color}`} />
-                  <Button variant="ghost" size="sm">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedGroupForSettings(group);
+                    }}
+                  >
                     <Settings className="h-4 w-4" />
                   </Button>
                 </div>
@@ -128,6 +137,13 @@ export const GroupManagement = () => {
           open={!!selectedGroup}
           onOpenChange={(open) => !open && setSelectedGroup(null)}
           group={selectedGroup}
+        />
+      )}
+      {selectedGroupForSettings && (
+        <GroupSettingsDialog
+          open={!!selectedGroupForSettings}
+          onOpenChange={(open) => !open && setSelectedGroupForSettings(null)}
+          group={selectedGroupForSettings}
         />
       )}
     </div>

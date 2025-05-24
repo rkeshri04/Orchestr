@@ -176,6 +176,51 @@ export type Database = {
           }
         ]
       }
+      group_invite_links: {
+        Row: {
+          id: string
+          group_id: string
+          invite_code: string
+          created_by: string
+          created_at: string
+          expires_at: string | null
+          is_active: boolean
+        }
+        Insert: {
+          id?: string
+          group_id: string
+          invite_code: string
+          created_by: string
+          created_at?: string
+          expires_at?: string | null
+          is_active?: boolean
+        }
+        Update: {
+          id?: string
+          group_id?: string
+          invite_code?: string
+          created_by?: string
+          created_at?: string
+          expires_at?: string | null
+          is_active?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_invite_links_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_invite_links_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       profiles: {
         Row: {
           id: string
