@@ -4,7 +4,7 @@ import { Calendar as LucideCalendar, Users, Clock, Plus, Trash2, ArrowRight, Che
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useGroupMembers, useMemberAvailability, useSetAvailability } from '@/hooks/useGroupMembers';
+import { useGroupMembers, useMemberUnavailability, useSetUnavailability } from '@/hooks/useGroupMembers';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 
@@ -28,13 +28,28 @@ export const GroupCalendarDialog = ({ open, onOpenChange, group }: GroupCalendar
   const { user } = useAuth();
   const { data: members = [], isLoading: loadingMembers } = useGroupMembers(group?.id);
   const selectedDate = selected ? format(selected, 'yyyy-MM-dd') : undefined;
-  const { data: availabilities = [] } = useMemberAvailability(group?.id, selectedDate);
-  const setAvailability = useSetAvailability();
+  const { data: availabilities = [] } = useMemberUnavailability(group?.id, selectedDate);
+  const setUnavailability = useSetUnavailability();
   const [timeFrames, setTimeFrames] = useState<TimeFrame[]>([{ start: '', end: '' }]);
   const [saved, setSaved] = useState(false);
 
-  // Step 1: Select date
+  // Helper to check if a date is in the past
+  const isPastDate = (date: Date): boolean => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date < today;
+  };
+
+  // Disable past dates in calendar
+  const isDateDisabled = (date: Date): boolean => {
+    return isPastDate(date);
+  };
+
+  // Step 1: Select date - only allow future dates
   const handleDateNext = () => {
+    if (selected && isPastDate(selected)) {
+      return; // Prevent proceeding with past dates
+    }
     setStep(Step.AddTimeFrames);
     setSaved(false);
   };
@@ -56,7 +71,7 @@ export const GroupCalendarDialog = ({ open, onOpenChange, group }: GroupCalendar
   // Step 3: Review & Save
   const handleSave = () => {
     if (!user || !selectedDate) return;
-    setAvailability.mutate(
+    setUnavailability.mutate(
       timeFrames
         .filter(tf => tf.start && tf.end)
         .map(tf => ({
@@ -96,9 +111,10 @@ export const GroupCalendarDialog = ({ open, onOpenChange, group }: GroupCalendar
             {group.name} Calendar
           </DialogTitle>
           <DialogDescription>
-            Schedule your availability for this group.
+            Schedule when you are unavilable for this group.
           </DialogDescription>
         </DialogHeader>
+        
         <div className="flex flex-col gap-8 mt-4">
           {/* Stepper UI */}
           <div className="flex items-center gap-2 mb-2">
@@ -112,15 +128,28 @@ export const GroupCalendarDialog = ({ open, onOpenChange, group }: GroupCalendar
           {/* Step 1: Select Date */}
           {step === Step.SelectDate && (
             <div className="flex flex-col gap-4">
-              <Calendar
-                mode="single"
-                selected={selected}
-                onSelect={setSelected}
-                className="rounded-lg border shadow self-center"
-              />
+              <div className="text-center">
+                <Calendar
+                  mode="single"
+                  selected={selected}
+                  onSelect={setSelected}
+                  disabled={isDateDisabled}
+                  className="rounded-lg border shadow self-center"
+                />
+                {selected && isPastDate(selected) && (
+                  <Badge variant="destructive" className="mt-2">
+                    Cannot schedule unavailability for past dates
+                  </Badge>
+                )}
+              </div>
               <div className="flex justify-end gap-2">
                 <Button onClick={() => handleDialogChange(false)} variant="outline">Cancel</Button>
-                <Button onClick={handleDateNext} disabled={!selected}>Next</Button>
+                <Button 
+                  onClick={handleDateNext} 
+                  disabled={!selected || isPastDate(selected)}
+                >
+                  Next
+                </Button>
               </div>
             </div>
           )}
@@ -131,7 +160,7 @@ export const GroupCalendarDialog = ({ open, onOpenChange, group }: GroupCalendar
               <div>
                 <h4 className="font-semibold mb-2 flex items-center gap-1">
                   <Clock className="h-4 w-4 text-orange-500" />
-                  When are you free on {selectedDate}?
+                  When are you busy on {selectedDate}?
                 </h4>
                 {timeFrames.map((tf, idx) => (
                   <div key={idx} className="flex gap-2 items-center mb-2">
@@ -170,7 +199,7 @@ export const GroupCalendarDialog = ({ open, onOpenChange, group }: GroupCalendar
               <div>
                 <h4 className="font-semibold mb-2 flex items-center gap-1">
                   <CheckCircle className="h-4 w-4 text-green-500" />
-                  Review your availability for {selectedDate}
+                  Review your unavailability for {selectedDate}
                 </h4>
                 <ul className="list-disc ml-6">
                   {timeFrames.map((tf, idx) => (
@@ -180,24 +209,27 @@ export const GroupCalendarDialog = ({ open, onOpenChange, group }: GroupCalendar
               </div>
               <div className="flex justify-between gap-2">
                 <Button onClick={handleBack} variant="outline">Back</Button>
-                <Button onClick={handleSave} disabled={setAvailability.isPending || saved}>
+                <Button onClick={handleSave} disabled={setUnavailability.isPending || saved}>
                   {saved ? 'Saved!' : 'Save'}
                 </Button>
               </div>
-              {saved && <div className="text-green-600 text-sm mt-2 flex items-center gap-1"><CheckCircle className="h-4 w-4" /> Availability saved!</div>}
+              {saved && <div className="text-green-600 text-sm mt-2 flex items-center gap-1"><CheckCircle className="h-4 w-4" /> Unavailability saved!</div>}
             </div>
           )}
 
-          {/* Group availability for the selected date */}
+          {/* Group unavailability for the selected date */}
           {selectedDate && (
             <div>
               <h4 className="font-semibold mb-2 flex items-center gap-1">
                 <Users className="h-4 w-4 text-purple-500" />
-                Group Availability for {selectedDate}
+                Group Unavailability for {selectedDate}
+                {selected && isPastDate(selected) && (
+                  <Badge variant="secondary" className="ml-2 text-xs">Past Date</Badge>
+                )}
               </h4>
               <div className="space-y-1">
                 {availabilities.length === 0 ? (
-                  <span className="text-gray-400 text-xs">No availability set for this day.</span>
+                  <span className="text-gray-400 text-xs">No unavailability set for this day.</span>
                 ) : (
                   availabilities.map((a, i) => {
                     const member = members.find(m => m.user_id === a.user_id);

@@ -15,7 +15,7 @@ export interface GroupMember {
   };
 }
 
-export interface Availability {
+export interface Busy {
   id: string;
   group_id: string;
   user_id: string;
@@ -88,33 +88,33 @@ export function useGroupMembers(groupId: string | undefined) {
   });
 }
 
-export function useMemberAvailability(groupId: string | undefined, date: string | undefined) {
+export function useMemberUnavailability(groupId: string | undefined, date: string | undefined) {
   return useQuery({
-    queryKey: ['availability', groupId, date],
+    queryKey: ['unavailability', groupId, date],
     enabled: !!groupId && !!date,
     queryFn: async () => {
       if (!groupId || !date) return [];
-      console.log('Fetching availability for group:', groupId, 'date:', date);
+      console.log('Fetching unavailability for group:', groupId, 'date:', date);
       
-      // First, get availability data without the problematic join
+      // First, get unavailability data without the problematic join
       const { data: availabilityData, error: availabilityError } = await supabase
-        .from('availability')
+        .from('busy')
         .select('*')
         .eq('group_id', groupId)
         .eq('date', date);
         
       if (availabilityError) {
-        console.error('Error fetching availability:', availabilityError);
+        console.error('Error fetching unavailability:', availabilityError);
         throw availabilityError;
       }
       
-      console.log('Fetched availability data:', availabilityData);
+      console.log('Fetched unavailability data:', availabilityData);
       
       if (!availabilityData || availabilityData.length === 0) {
         return [];
       }
       
-      // Get unique user IDs from availability data
+      // Get unique user IDs from unavailability data
       const userIds = [...new Set(availabilityData.map(item => item.user_id))];
       
       // Fetch profiles for these users
@@ -144,7 +144,7 @@ export function useMemberAvailability(groupId: string | undefined, date: string 
         profiles: profileMap.get(item.user_id) || null
       }));
       
-      return convertedData as Availability[];
+      return convertedData as Busy[];
     },
   });
 }
@@ -173,30 +173,30 @@ function convertTimeToHHMM(timeStr: string): string {
   return `${hours}:${minutes || '00'}`;
 }
 
-export function useSetAvailability() {
+export function useSetUnavailability() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (payload: Omit<Availability, 'id'> | Omit<Availability, 'id'>[]) => {
-      console.log('Setting availability:', payload);
+    mutationFn: async (payload: Omit<Busy, 'id'> | Omit<Busy, 'id'>[]) => {
+      console.log('Setting unavailability:', payload);
       
-      const newAvailability = Array.isArray(payload) ? payload[0] : payload;
-      const { group_id, user_id, date, start_time, end_time } = newAvailability;
+      const newUnavailability = Array.isArray(payload) ? payload[0] : payload;
+      const { group_id, user_id, date, start_time, end_time } = newUnavailability;
       
-      // First, get existing availability for the same user on the same date
+      // First, get existing unavailability for the same user on the same date
       const { data: existingData, error: fetchError } = await supabase
-        .from('availability')
+        .from('busy')
         .select('*')
         .eq('group_id', group_id)
         .eq('user_id', user_id)
         .eq('date', date);
         
       if (fetchError) {
-        console.error('Error fetching existing availability:', fetchError);
+        console.error('Error fetching existing unavailability:', fetchError);
         throw fetchError;
       }
       
-      console.log('Existing availability:', existingData);
+      console.log('Existing unavailability:', existingData);
       
       // Helper function to convert time to minutes for easier comparison
       const timeToMinutes = (timeStr: string): number => {
@@ -214,7 +214,7 @@ export function useSetAvailability() {
       const newStart = timeToMinutes(start_time);
       const newEnd = timeToMinutes(end_time);
       
-      // Process existing availability to handle overlaps
+      // Process existing unavailability to handle overlaps
       const updatedSlots: Array<{id?: string, start: number, end: number}> = [];
       const slotsToDelete: string[] = [];
       
@@ -247,12 +247,12 @@ export function useSetAvailability() {
       // Delete overlapping slots
       if (slotsToDelete.length > 0) {
         const { error: deleteError } = await supabase
-          .from('availability')
+          .from('busy')
           .delete()
           .in('id', slotsToDelete);
           
         if (deleteError) {
-          console.error('Error deleting overlapping availability:', deleteError);
+          console.error('Error deleting overlapping unavailability:', deleteError);
           throw deleteError;
         }
       }
@@ -268,7 +268,7 @@ export function useSetAvailability() {
           end_time: minutesToTime(slot.end)
         }));
       
-      // Add the new availability slot
+      // Add the new unavailability slot
       slotsToInsert.push({
         group_id,
         user_id,
@@ -277,67 +277,67 @@ export function useSetAvailability() {
         end_time
       });
       
-      console.log('Inserting availability slots:', slotsToInsert);
+      console.log('Inserting unavailability slots:', slotsToInsert);
       
       // Insert all new slots
       const { data, error } = await supabase
-        .from('availability')
+        .from('busy')
         .insert(slotsToInsert)
         .select();
         
       if (error) {
-        console.error('Error setting availability:', error);
+        console.error('Error setting unavailability:', error);
         throw error;
       }
       
-      return data as Availability[];
+      return data as Busy[];
     },
     onSuccess: (data, variables) => {
-      // Invalidate queries to refetch availability data
+      // Invalidate queries to refetch unavailability data
       const groupId = Array.isArray(variables) ? variables[0]?.group_id : variables.group_id;
       const date = Array.isArray(variables) ? variables[0]?.date : variables.date;
       
       queryClient.invalidateQueries({ 
-        queryKey: ['availability', groupId, date] 
+        queryKey: ['unavailability', groupId, date] 
       });
       
-      toast.success('Availability updated successfully!');
+      toast.success('Unavailability updated successfully!');
     },
     onError: (error) => {
-      console.error('Error updating availability:', error);
-      toast.error('Failed to update availability');
+      console.error('Error updating unavailability:', error);
+      toast.error('Failed to update unavailability');
     }
   });
 }
 
-export function useDeleteAvailability() {
+export function useDeleteUnavailability() {
   const queryClient = useQueryClient();
   
   return useMutation({
     mutationFn: async (availabilityId: string) => {
       const { error } = await supabase
-        .from('availability')
+        .from('busy')
         .delete()
         .eq('id', availabilityId);
         
       if (error) {
-        console.error('Error deleting availability:', error);
+        console.error('Error deleting unavailability:', error);
         throw error;
       }
       
       return availabilityId;
     },
     onSuccess: () => {
-      // Invalidate all availability queries
+      // Invalidate all unavailability queries
       queryClient.invalidateQueries({ 
-        queryKey: ['availability'] 
+        queryKey: ['unavailability'] 
       });
       
-      toast.success('Availability deleted successfully!');
+      toast.success('Unavailability deleted successfully!');
     },
     onError: (error) => {
-      console.error('Error deleting availability:', error);
-      toast.error('Failed to delete availability');
+      console.error('Error deleting unavailability:', error);
+      toast.error('Failed to delete unavailability');
     }
   });
 }

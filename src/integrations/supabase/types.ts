@@ -9,7 +9,7 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      availability: {
+      busy: {
         Row: {
           id: string
           group_id: string

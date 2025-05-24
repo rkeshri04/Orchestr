@@ -4,17 +4,17 @@ import { Calendar as LucideCalendar, ArrowLeft, Plus, Edit, Trash2 } from "lucid
 import { Calendar } from "@/components/ui/calendar";
 import { FullPageCalendar } from "@/components/ui/fullpage-calendar";
 import { Button } from "@/components/ui/button";
-import { useGroupMembers, useMemberAvailability } from '@/hooks/useGroupMembers';
+import { useGroupMembers, useMemberUnavailability } from '@/hooks/useGroupMembers';
 import { GroupCalendarDialog } from "@/components/GroupCalendarDialog";
 import { useGroups } from '@/hooks/useGroups';
+import { useEvents } from '@/hooks/useEvents';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { useSetAvailability, useDeleteAvailability } from '@/hooks/useGroupMembers';
+import { useSetUnavailability, useDeleteUnavailability } from '@/hooks/useGroupMembers';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
+import { Badge } from "@/components/ui/badge";
 
 const userColors = [
   "bg-blue-400/60 border-blue-500",
@@ -31,23 +31,25 @@ export default function TeamCalendarPage() {
   const { teamId } = useParams();
   const navigate = useNavigate();
   const { groups } = useGroups();
-  const group = groups.find(g => g.id === teamId);
+  const group = groups?.find(g => g.id === teamId);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDialog, setShowDialog] = useState(false);
   const { data: members = [] } = useGroupMembers(group?.id);
   const selectedDateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined;
-  const { data: availabilities = [] } = useMemberAvailability(group?.id, selectedDateStr);
+  const { data: availabilities = [] } = useMemberUnavailability(group?.id, selectedDateStr);
+  const { data: events = [] } = useEvents(group?.id);
   
   console.log('Current members:', members);
   console.log('Current availabilities:', availabilities);
+  console.log('Current events:', events);
   console.log('Selected date:', selectedDateStr);
   
   const memberColorMap = Object.fromEntries(
     members.map((m, i) => [m.user_id, userColors[i % userColors.length]])
   );
   const { user } = useAuth();
-  const setAvailability = useSetAvailability();
-  const deleteAvailability = useDeleteAvailability();
+  const setUnavailability = useSetUnavailability();
+  const deleteUnavailability = useDeleteUnavailability();
   const queryClient = useQueryClient();
 
   // Drag-to-select state
@@ -55,17 +57,17 @@ export default function TeamCalendarPage() {
   const [dragEnd, setDragEnd] = useState<number | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   // Store confirmed time range separately to avoid state loss during modal open/close
-  const [confirmedTimeRange, setConfirmedTimeRange] = useState<{start: number; end: number} | null>(null);
+  const [confirmedTimeRange, setConfirmedTimeRange] = useState<{start: number; end: number; visualEnd?: number} | null>(null);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
-    availability: any;
+    unavailability: any;
   } | null>(null);
   
-  // Edit availability state
-  const [editingAvailability, setEditingAvailability] = useState<any | null>(null);
+  // Edit unavailability state
+  const [editingUnavailability, setEditingUnavailability] = useState<any | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editTimeRange, setEditTimeRange] = useState<{start: number; end: number} | null>(null);
 
@@ -81,27 +83,44 @@ export default function TeamCalendarPage() {
     return `${hours}:00`;
   };
 
-  // Handle mouse events for drag selection
+  // Helper to check if a date is in the past
+  const isPastDate = (date: Date | null): boolean => {
+    if (!date) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date < today;
+  };
+
+  // Handle mouse events for drag selection - only allow for future dates
   const handleGridMouseDown = (e: React.MouseEvent, hour: number) => {
+    if (isPastDate(selectedDate)) return; // Prevent dragging on past dates
+    
     console.log("Mouse down on hour:", hour);
     setDragStart(hour);
     setDragEnd(hour);
   };
+  
   const handleGridMouseEnter = (e: React.MouseEvent, hour: number) => {
+    if (isPastDate(selectedDate)) return; // Prevent dragging on past dates
+    
     if (dragStart !== null) {
       console.log("Mouse enter on hour:", hour);
       setDragEnd(hour);
     }
   };
+  
   const handleGridMouseUp = () => {
+    if (isPastDate(selectedDate)) return; // Prevent dragging on past dates
+    
     if (dragStart !== null && dragEnd !== null && dragStart !== dragEnd) {
       const start = Math.min(dragStart, dragEnd);
-      const end = Math.max(dragStart, dragEnd);
+      const visualEnd = Math.max(dragStart, dragEnd); // This is what user sees and expects
       
-      // Store the selected range in a stable state variable
+      // Store the visual range (what user expects to be saved)
       setConfirmedTimeRange({
         start: start,
-        end: end
+        end: visualEnd, // Store the visual end for saving
+        visualEnd: visualEnd // Store visual end for display (same value)
       });
       
       // Show the modal after storing the time range
@@ -111,37 +130,36 @@ export default function TeamCalendarPage() {
   const resetDrag = () => {
     setDragStart(null);
     setDragEnd(null);
-    // Don't reset confirmedTimeRange here - we want to keep it for the modal
   };
 
-  // Confirm and save new availability
-  const handleConfirmAvailability = () => {
+  // Confirm and save new unavailability
+  const handleConfirmUnavailability = () => {
     if (!user || !selectedDate || !confirmedTimeRange) return;
     
     const { start, end } = confirmedTimeRange;
     
-    setAvailability.mutate({
+    setUnavailability.mutate({
       group_id: group.id,
       user_id: user.id,
       date: format(selectedDate, 'yyyy-MM-dd'),
       start_time: hourToTime(start),
-      end_time: hourToTime(end),
+      end_time: hourToTime(end), // This now saves the visual end time user expects
     });
     setShowConfirmModal(false);
     resetDrag();
   };
 
-  // Handle right-click on availability rectangle
-  const handleAvailabilityRightClick = (e: React.MouseEvent, availability: any) => {
+  // Handle right-click on unavailability rectangle
+  const handleUnavailabilityRightClick = (e: React.MouseEvent, unavailability: any) => {
     e.preventDefault();
     e.stopPropagation();
     
-    // Only show context menu for current user's availability
-    if (availability.user_id === user?.id) {
+    // Only show context menu for current user's unavailability
+    if (unavailability.user_id === user?.id) {
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
-        availability
+        unavailability
       });
     }
   };
@@ -151,36 +169,36 @@ export default function TeamCalendarPage() {
     setContextMenu(null);
   };
 
-  // Handle edit availability
-  const handleEditAvailability = () => {
+  // Handle edit unavailability
+  const handleEditUnavailability = () => {
     if (!contextMenu) return;
     
-    const availability = contextMenu.availability;
-    setEditingAvailability(availability);
+    const unavailability = contextMenu.unavailability;
+    setEditingUnavailability(unavailability);
     
     // Convert time to hours for editing
-    const startHour = Math.floor(timeToDecimal(availability.start_time));
-    const endHour = Math.ceil(timeToDecimal(availability.end_time));
+    const startHour = Math.floor(timeToDecimal(unavailability.start_time));
+    const endHour = Math.ceil(timeToDecimal(unavailability.end_time));
     
     setEditTimeRange({ start: startHour, end: endHour });
     setShowEditModal(true);
     closeContextMenu();
   };
 
-  // Handle delete availability
-  const handleDeleteAvailability = () => {
+  // Handle delete unavailability
+  const handleDeleteUnavailability = () => {
     if (!contextMenu) return;
     
-    const availability = contextMenu.availability;
-    deleteAvailability.mutate(availability.id);
+    const unavailability = contextMenu.unavailability;
+    deleteUnavailability.mutate(unavailability.id);
     closeContextMenu();
   };
 
-  // Handle update availability
-  const handleUpdateAvailability = () => {
-    if (!editingAvailability || !editTimeRange) return;
+  // Handle update unavailability
+  const handleUpdateUnavailability = () => {
+    if (!editingUnavailability || !editTimeRange) return;
     
-    setAvailability.mutate({
+    setUnavailability.mutate({
       group_id: group.id,
       user_id: user.id,
       date: format(selectedDate, 'yyyy-MM-dd'),
@@ -188,17 +206,17 @@ export default function TeamCalendarPage() {
       end_time: hourToTime(editTimeRange.end),
     });
     
-    // Delete the old availability record
+    // Delete the old unavailability record
     supabase
-      .from('availability')
+      .from('busy')
       .delete()
-      .eq('id', editingAvailability.id)
+      .eq('id', editingUnavailability.id)
       .then(() => {
-        console.log('Old availability deleted');
+        console.log('Old unavailability deleted');
       });
     
     setShowEditModal(false);
-    setEditingAvailability(null);
+    setEditingUnavailability(null);
     setEditTimeRange(null);
   };
 
@@ -212,9 +230,12 @@ export default function TeamCalendarPage() {
           {group?.name || 'Team'} Calendar
         </h2>
         <div className="flex-1" />
-        <Button size="sm" className="ml-2" onClick={() => setShowDialog(true)}>
-          <Plus className="h-4 w-4 mr-1" /> Set My Availability
-        </Button>
+        {/* Only show the button for future dates */}
+        {!isPastDate(selectedDate) && (
+          <Button size="sm" className="ml-2" onClick={() => setShowDialog(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Set Unavailability
+          </Button>
+        )}
       </div>
       
       {/* Container for calendar content - takes remaining screen height */}
@@ -231,109 +252,220 @@ export default function TeamCalendarPage() {
         
         {/* Time view for a specific date */}
         {selectedDate && (
-          <div className="flex flex-1 h-full">
-            {/* Time grid for selected date */}
-            <div className="flex-1 flex flex-col items-center justify-center">
-              <div className="w-full max-w-3xl mx-auto">
+          <div className="flex flex-1 h-full gap-4">
+            {/* Time grid for selected date - 80% width */}
+            <div className="w-4/5 flex flex-col py-4 px-4">
+              <div className="w-full h-full flex flex-col">
                 <div className="flex items-center justify-between mb-4">
                   <Button variant="outline" size="sm" onClick={() => setSelectedDate(null)}>
                     &larr; Back to Month
                   </Button>
                   <h3 className="font-semibold text-lg flex items-center gap-2">
                     {format(selectedDate, 'PPP')}
+                    {isPastDate(selectedDate) && (
+                      <Badge variant="secondary" className="text-xs">Past Date</Badge>
+                    )}
                   </h3>
                   <div className="w-32" />
                 </div>
 
-                {/* Members legend */}
-                {members.length > 0 && (
-                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                    <h4 className="text-sm font-medium mb-2">Team Members:</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {members.map((member, idx) => (
-                        <div key={member.user_id} className="flex items-center gap-2">
-                          <div className={`w-3 h-3 rounded-sm ${memberColorMap[member.user_id]}`}></div>
-                          <span className="text-sm">
-                            {member.profile?.full_name || member.profile?.email || 'Unknown User'}
-                          </span>
+                {/* Scrollable time container with increased height */}
+                <div className="flex-1 overflow-y-auto border rounded-lg bg-white">
+                  <div
+                    className={`relative h-[1200px] select-none ${
+                      isPastDate(selectedDate) ? 'opacity-75' : ''
+                    }`}
+                    onMouseLeave={resetDrag}
+                    onMouseUp={handleGridMouseUp}
+                  >
+                    {/* 24h grid with drag handlers */}
+                    <div className="absolute left-0 top-0 w-full h-full grid grid-rows-24 border-r">
+                      {[...Array(24)].map((_, h) => (
+                        <div
+                          key={h}
+                          className={`border-b border-dashed border-gray-200 text-xs text-gray-400 pl-2 flex items-center h-[50px] ${
+                            isPastDate(selectedDate) 
+                              ? 'cursor-not-allowed' 
+                              : 'cursor-pointer'
+                          } ${
+                            !isPastDate(selectedDate) && dragStart !== null && dragEnd !== null && h >= Math.min(dragStart, dragEnd) && h <= Math.max(dragStart, dragEnd)
+                              ? 'bg-blue-100/70'
+                              : ''
+                          }`}
+                          onMouseDown={e => handleGridMouseDown(e, h)}
+                          onMouseEnter={e => handleGridMouseEnter(e, h)}
+                        >
+                          {h}:00
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
 
-                <div
-                  className="relative h-[600px] border rounded-lg bg-white overflow-hidden select-none"
-                  onMouseLeave={resetDrag}
-                  onMouseUp={handleGridMouseUp}
-                >
-                  {/* 24h grid with drag handlers */}
-                  <div className="absolute left-0 top-0 w-full h-full grid grid-rows-24 border-r">
-                    {[...Array(24)].map((_, h) => (
-                      <div
-                        key={h}
-                        className={`border-b border-dashed border-gray-200 text-xs text-gray-400 pl-2 flex items-center h-[25px] cursor-pointer ${
-                          dragStart !== null && dragEnd !== null && h >= Math.min(dragStart, dragEnd) && h <= Math.max(dragStart, dragEnd)
-                            ? 'bg-blue-100/70'
-                            : ''
-                        }`}
-                        onMouseDown={e => handleGridMouseDown(e, h)}
-                        onMouseEnter={e => handleGridMouseEnter(e, h)}
-                      >
-                        {h}:00
+                    {/* Show overlay message for past dates */}
+                    {isPastDate(selectedDate) && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-100/50 backdrop-blur-sm z-50">
+                        <div className="text-center p-4 bg-white rounded-lg shadow border">
+                          <LucideCalendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                          <p className="text-gray-600 font-medium">Cannot edit past dates</p>
+                          <p className="text-gray-500 text-sm">You can view existing unavailability but cannot create new slots</p>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    )}
 
-                  {/* Availability rectangles for all team members */}
-                  {availabilities.map((availability, availIndex) => {
-                    const memberIndex = members.findIndex(m => m.user_id === availability.user_id);
-                    const color = memberColorMap[availability.user_id] || userColors[0];
-                    const isCurrentUser = availability.user_id === user?.id;
-                    
-                    // Calculate position based on time
-                    const startDecimal = timeToDecimal(availability.start_time);
-                    const endDecimal = timeToDecimal(availability.end_time);
-                    const top = (startDecimal / 24) * 600;
-                    const height = ((endDecimal - startDecimal) / 24) * 600;
-                    
-                    // Get member info for display
-                    const member = members.find(m => m.user_id === availability.user_id);
-                    const memberName = member?.profile?.full_name || member?.profile?.email || 'Unknown';
-                    
-                    return (
-                      <div
-                        key={`${availability.id}-${availIndex}`}
-                        className={`${color} absolute border rounded-md flex items-center px-2 py-1 text-xs font-medium ${
-                          isCurrentUser ? 'cursor-context-menu hover:opacity-90' : 'pointer-events-none'
-                        }`}
-                        style={{
-                          left: `${60 + (memberIndex * 10)}px`,
-                          width: 'calc(100% - 80px)',
-                          top: `${top}px`,
-                          height: `${Math.max(height, 20)}px`,
-                          zIndex: 10 + memberIndex,
-                          opacity: 0.85,
-                        }}
-                        onContextMenu={e => handleAvailabilityRightClick(e, availability)}
-                      >
-                        <span className="truncate">
-                          {memberName}: {availability.start_time} - {availability.end_time}
-                        </span>
-                      </div>
-                    );
-                  })}
+                    {/* Unavailability rectangles for all team members */}
+                    {availabilities.map((unavailability, availIndex) => {
+                      const memberIndex = members.findIndex(m => m.user_id === unavailability.user_id);
+                      const color = memberColorMap[unavailability.user_id] || userColors[0];
+                      const isCurrentUser = unavailability.user_id === user?.id;
+                      
+                      // Calculate position based on time with increased height
+                      const startDecimal = timeToDecimal(unavailability.start_time);
+                      const endDecimal = timeToDecimal(unavailability.end_time) + 1; // Add 1 hour for proper rectangle display
+                      const top = (startDecimal / 24) * 1200;
+                      const height = ((endDecimal - startDecimal) / 24) * 1200;
+                      
+                      // Get member info for display
+                      const member = members.find(m => m.user_id === unavailability.user_id);
+                      const memberName = member?.profile?.full_name || member?.profile?.email || 'Unknown';
+                      
+                      return (
+                        <div
+                          key={`${unavailability.id}-${availIndex}`}
+                          className={`${color} absolute border rounded-md flex items-center px-2 py-1 text-xs font-medium ${
+                            isCurrentUser ? 'cursor-context-menu hover:opacity-90' : 'pointer-events-none'
+                          }`}
+                          style={{
+                            left: `${60 + (memberIndex * 10)}px`,
+                            width: 'calc(100% - 80px)',
+                            top: `${top}px`,
+                            height: `${Math.max(height, 40)}px`,
+                            zIndex: 10 + memberIndex,
+                            opacity: 0.85,
+                          }}
+                          onContextMenu={e => handleUnavailabilityRightClick(e, unavailability)}
+                        >
+                          <span className="truncate">
+                            {memberName}: {unavailability.start_time} - {unavailability.end_time}
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    {/* Event rectangles for scheduled events */}
+                    {events
+                      .filter(event => {
+                        // Only show events for the selected date
+                        const eventDate = format(new Date(event.start_time), 'yyyy-MM-dd');
+                        return eventDate === selectedDateStr;
+                      })
+                      .map((event, eventIndex) => {
+                        const eventStartTime = new Date(event.start_time);
+                        const eventEndTime = new Date(event.end_time);
+                        
+                        // Calculate position based on time with same logic as unavailability rectangles
+                        const startDecimal = eventStartTime.getHours() + (eventStartTime.getMinutes() / 60);
+                        const endDecimal = eventEndTime.getHours() + (eventEndTime.getMinutes() / 60) + 1; // Add 1 hour for proper rectangle display
+                        const top = (startDecimal / 24) * 1200;
+                        const height = ((endDecimal - startDecimal) / 24) * 1200;
+                        
+                        return (
+                          <div
+                            key={`event-${event.id}-${eventIndex}`}
+                            className="absolute border-2 border-green-600 bg-green-100/90 rounded-md flex items-center px-2 py-1 text-xs font-bold text-green-800"
+                            style={{
+                              left: '60px', // Same left position as unavailability rectangles
+                              width: 'calc(100% - 80px)', // Same width calculation as unavailability rectangles
+                              top: `${top}px`,
+                              height: `${Math.max(height, 40)}px`,
+                              zIndex: 50, // Higher z-index to appear above unavailability
+                            }}
+                            title={`${event.title}\n${event.description || ''}`}
+                          >
+                            <span className="truncate">
+                              📅 {event.title} ({format(eventStartTime, 'HH:mm')} - {format(eventEndTime, 'HH:mm')})
+                            </span>
+                          </div>
+                        );
+                      })}
+                  </div>
                 </div>
               </div>
             </div>
-            {/* Mini calendar on the right */}
-            <div className="w-[320px] flex flex-col items-center pt-8 pr-8">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={date => date && setSelectedDate(date)}
-                className="bg-white rounded-lg shadow p-2 w-full"
-              />
+            
+            {/* Right sidebar - 20% width */}
+            <div className="w-1/5 flex flex-col py-4 pr-4 space-y-6">
+              {/* Mini calendar on top */}
+              <div className="flex flex-col">
+                <h4 className="text-sm font-medium mb-2 text-gray-700">Calendar</h4>
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={date => date && setSelectedDate(date)}
+                  className="bg-white rounded-lg shadow p-2 w-full"
+                />
+              </div>
+
+              {/* Team members below calendar */}
+              {members.length > 0 && (
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <h4 className="text-sm font-medium mb-3 text-gray-700">Team Members</h4>
+                  <div className="space-y-2">
+                    {members.map((member, idx) => (
+                      <div key={member.user_id} className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-sm flex-shrink-0 ${memberColorMap[member.user_id]}`}></div>
+                        <span className="text-xs truncate">
+                          {member.profile?.full_name || member.profile?.email || 'Unknown User'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Events section */}
+              {selectedDate && (
+                <div className="bg-green-50 rounded-lg p-3">
+                  <h4 className="text-sm font-medium mb-3 text-gray-700 flex items-center gap-1">
+                    📅 Events for {format(selectedDate, 'MMM d')}
+                  </h4>
+                  <div className="space-y-2">
+                    {events
+                      .filter(event => {
+                        const eventDate = format(new Date(event.start_time), 'yyyy-MM-dd');
+                        return eventDate === selectedDateStr;
+                      })
+                      .length === 0 ? (
+                      <div className="text-xs text-gray-500 italic">
+                        No events scheduled
+                      </div>
+                    ) : (
+                      events
+                        .filter(event => {
+                          const eventDate = format(new Date(event.start_time), 'yyyy-MM-dd');
+                          return eventDate === selectedDateStr;
+                        })
+                        .map((event, idx) => {
+                          const startTime = new Date(event.start_time);
+                          const endTime = new Date(event.end_time);
+                          return (
+                            <div key={event.id} className="bg-green-100 border border-green-200 rounded p-2">
+                              <div className="font-medium text-xs text-green-800 truncate">
+                                {event.title}
+                              </div>
+                              <div className="text-xs text-green-600">
+                                {format(startTime, 'HH:mm')} - {format(endTime, 'HH:mm')}
+                              </div>
+                              {event.description && (
+                                <div className="text-xs text-green-600 truncate">
+                                  {event.description}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -345,7 +477,7 @@ export default function TeamCalendarPage() {
         group={group}
       />
 
-      {/* Confirmation modal for new availability */}
+      {/* Confirmation modal for new unavailability */}
       <Dialog 
         open={showConfirmModal} 
         onOpenChange={open => { 
@@ -354,17 +486,17 @@ export default function TeamCalendarPage() {
         }}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Confirm Availability</DialogTitle>
-            <DialogDescription>Please confirm your availability time slot</DialogDescription>
+            <DialogTitle>Confirm Unavailability</DialogTitle>
+            <DialogDescription>Please confirm your unavailability time slot</DialogDescription>
           </DialogHeader>
           <div className="py-2 text-center">
-            Add availability for <b>{selectedDate && format(selectedDate, 'PPP')}</b>
+            Add unavailability for <b>{selectedDate && format(selectedDate, 'PPP')}</b>
             
             <div className="font-semibold text-blue-700 text-lg mt-3 mb-3 border border-gray-200 rounded-md p-2 bg-blue-50">
               {confirmedTimeRange && (
                 <>
                   <p>From: <span className="text-black">{hourToTime(confirmedTimeRange.start)}</span></p>
-                  <p>To: <span className="text-black">{hourToTime(confirmedTimeRange.end)}</span></p>
+                  <p>To: <span className="text-black">{hourToTime(confirmedTimeRange.visualEnd ?? confirmedTimeRange.end)}</span></p>
                 </>
               )}
             </div>
@@ -374,10 +506,10 @@ export default function TeamCalendarPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setShowConfirmModal(false); resetDrag(); }}>Cancel</Button>
             <Button 
-              onClick={handleConfirmAvailability} 
-              disabled={setAvailability.isPending}
+              onClick={handleConfirmUnavailability} 
+              disabled={setUnavailability.isPending}
             >
-              {setAvailability.isPending ? 'Saving...' : 'Confirm'}
+              {setUnavailability.isPending ? 'Saving...' : 'Confirm'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -394,14 +526,14 @@ export default function TeamCalendarPage() {
         >
           <button
             className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-            onClick={handleEditAvailability}
+            onClick={handleEditUnavailability}
           >
             <Edit className="h-4 w-4" />
             Edit Time
           </button>
           <button
             className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 text-red-600 flex items-center gap-2"
-            onClick={handleDeleteAvailability}
+            onClick={handleDeleteUnavailability}
           >
             <Trash2 className="h-4 w-4" />
             Delete
@@ -409,15 +541,15 @@ export default function TeamCalendarPage() {
         </div>
       )}
 
-      {/* Edit Availability Modal */}
+      {/* Edit Unavailability Modal */}
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
         <DialogContent className="max-w-xs">
           <DialogHeader>
-            <DialogTitle>Edit Availability</DialogTitle>
-            <DialogDescription>Modify your availability time slot</DialogDescription>
+            <DialogTitle>Edit Unavailability</DialogTitle>
+            <DialogDescription>Modify your unavailability time slot</DialogDescription>
           </DialogHeader>
           <div className="py-2 text-center">
-            <p className="mb-4">Edit availability for <b>{selectedDate && format(selectedDate, 'PPP')}</b></p>
+            <p className="mb-4">Edit unavailability for <b>{selectedDate && format(selectedDate, 'PPP')}</b></p>
             
             {editTimeRange && (
               <div className="space-y-3">
@@ -451,10 +583,10 @@ export default function TeamCalendarPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditModal(false)}>Cancel</Button>
             <Button 
-              onClick={handleUpdateAvailability} 
-              disabled={setAvailability.isPending}
+              onClick={handleUpdateUnavailability} 
+              disabled={setUnavailability.isPending}
             >
-              {setAvailability.isPending ? 'Updating...' : 'Update'}
+              {setUnavailability.isPending ? 'Updating...' : 'Update'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -2,8 +2,7 @@ import { useState } from "react";
 import { Calendar as LucideCalendar, Users, ArrowLeft, Plus } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { useGroupMembers, useMemberAvailability } from '@/hooks/useGroupMembers';
+import { useGroupMembers, useMemberUnavailability } from '@/hooks/useGroupMembers';
 import { GroupCalendarDialog } from "@/components/GroupCalendarDialog";
 import { format } from 'date-fns';
 
@@ -24,7 +23,7 @@ export const GroupTeamCalendarScreen = ({ group, onBack }: { group: any, onBack:
   const [showDialog, setShowDialog] = useState(false);
   const { data: members = [] } = useGroupMembers(group?.id);
   const selectedDateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined;
-  const { data: availabilities = [] } = useMemberAvailability(group?.id, selectedDateStr);
+  const { data: availabilities = [] } = useMemberUnavailability(group?.id, selectedDateStr);
 
   // Assign a color to each user
   const memberColorMap = Object.fromEntries(
