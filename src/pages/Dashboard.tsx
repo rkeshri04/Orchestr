@@ -2,8 +2,10 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Calendar, LogOut, Settings, Bell } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Calendar, LogOut, Settings, Bell, Users, Bot } from "lucide-react";
 import { GroupManagement } from "@/components/GroupManagement";
+import { AISchedulingChat } from "@/components/AISchedulingChat";
 import { useAuth } from "@/hooks/useAuth";
 
 const Dashboard = () => {
@@ -74,7 +76,26 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <GroupManagement />
+        <Tabs defaultValue="groups" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="groups" className="flex items-center space-x-2">
+              <Users className="h-4 w-4" />
+              <span>Groups</span>
+            </TabsTrigger>
+            <TabsTrigger value="ai-chat" className="flex items-center space-x-2">
+              <Bot className="h-4 w-4" />
+              <span>AI Assistant</span>
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="groups">
+            <GroupManagement />
+          </TabsContent>
+          
+          <TabsContent value="ai-chat">
+            <AISchedulingChat />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
