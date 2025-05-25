@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Users, Clock, Sparkles, ArrowRight, Check, LogOut } from "lucide-react";
+import { Calendar, Users, RefreshCw, Clock, Sparkles, ArrowRight, Check, LogOut } from "lucide-react";
 import { AuthModal } from "@/components/AuthModal";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -28,9 +27,9 @@ const Index = () => {
       description: "Just tell us what you need in plain English - our AI handles the rest"
     },
     {
-      icon: <Calendar className="h-6 w-6 text-green-500" />,
-      title: "Calendar Integration",
-      description: "Seamlessly syncs with Google Calendar, Outlook, and more"
+      icon: <RefreshCw className="h-6 w-6 text-purple-500" />,
+      title: "Seamless Group Sync",
+      description: "Keep everyone in your group on the same page with shared schedules."
     },
     {
       icon: <Users className="h-6 w-6 text-purple-500" />,
@@ -106,7 +105,7 @@ const Index = () => {
           <Badge className="mb-6 bg-blue-100 text-blue-700 hover:bg-blue-100">
             ✨ AI-Powered Group Scheduling
           </Badge>
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent leading-tight">
+          <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent leading-tight">
             Never Play Schedule Tag Again
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
@@ -165,7 +164,7 @@ const Index = () => {
       </section>
 
       {/* How It Works */}
-      <section className="px-4 py-20">
+      {/* <section className="px-4 py-20">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
@@ -203,10 +202,10 @@ const Index = () => {
             ))}
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* Testimonials */}
-      <section className="px-4 py-20 bg-gradient-to-r from-blue-500 to-purple-600">
+      {/* <section className="px-4 py-20 bg-gradient-to-r from-blue-500 to-purple-600">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-12">
             Loved by Busy People Everywhere
@@ -222,7 +221,7 @@ const Index = () => {
             ))}
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* CTA Section */}
       <section className="px-4 py-20 bg-gray-50">
@@ -230,9 +229,9 @@ const Index = () => {
           <h2 className="text-3xl md:text-4xl font-bold mb-6">
             Ready to End Schedule Chaos?
           </h2>
-          <p className="text-xl text-gray-600 mb-8">
-            Join thousands who've already simplified their scheduling
-          </p>
+          {/* <p className="text-xl text-gray-600 mb-8">
+            Join and make your scheduling easy
+          </p> */}
           <Button 
             size="lg" 
             onClick={handleGetStarted}
@@ -241,20 +240,17 @@ const Index = () => {
             Get Started Free Today
             <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
-          <div className="flex items-center justify-center space-x-6 mt-6 text-sm text-gray-500">
+          {/* <div className="flex items-center justify-center space-x-6 mt-6 text-sm text-gray-500">
             <div className="flex items-center">
               <Check className="h-4 w-4 text-green-500 mr-1" />
-              Free to start
+              Free
             </div>
-            <div className="flex items-center">
-              <Check className="h-4 w-4 text-green-500 mr-1" />
-              No credit card required
-            </div>
+            
             <div className="flex items-center">
               <Check className="h-4 w-4 text-green-500 mr-1" />
               Cancel anytime
             </div>
-          </div>
+          </div> */}
         </div>
       </section>
 
@@ -269,13 +265,13 @@ const Index = () => {
               <span className="text-xl font-bold text-white">Orchestr</span>
             </div>
             <div className="flex space-x-6">
-              <a href="#" className="hover:text-white transition-colors">Privacy</a>
-              <a href="#" className="hover:text-white transition-colors">Terms</a>
-              <a href="#" className="hover:text-white transition-colors">Support</a>
+              {/* <a href="#" className="hover:text-white transition-colors">Privacy</a>
+              <a href="#" className="hover:text-white transition-colors">Terms</a> */}
+              <a href="mailto:officialorchestr@gmail.com" className="hover:text-white transition-colors">Support</a>
             </div>
           </div>
           <div className="mt-8 pt-8 border-t border-gray-800 text-center text-gray-400">
-            © 2024 Orchestr. All rights reserved.
+            © 2025 Orchestr. All rights reserved.
           </div>
         </div>
       </footer>

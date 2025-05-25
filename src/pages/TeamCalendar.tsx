@@ -99,9 +99,9 @@ export default function TeamCalendarPage() {
       if (unavailability.user_id !== user.id) return false;
       
       const startHour = Math.floor(timeToDecimal(unavailability.start_time));
-      const endHour = Math.ceil(timeToDecimal(unavailability.end_time));
+      const endHour = Math.floor(timeToDecimal(unavailability.end_time)); // changed from Math.ceil to Math.floor
       
-      return hour >= startHour && hour < endHour;
+      return hour >= startHour && hour < endHour; // only block up to but not including endHour
     });
   };
 
@@ -343,9 +343,11 @@ export default function TeamCalendarPage() {
                       
                       // Calculate position based on time with increased height
                       const startDecimal = timeToDecimal(unavailability.start_time);
-                      const endDecimal = timeToDecimal(unavailability.end_time) + 1; // Add 1 hour for proper rectangle display
+                      const endDecimal = timeToDecimal(unavailability.end_time);
+                      let height = ((endDecimal - startDecimal) / 24) * 1200;
+                      // Ensure at least 1 hour block is shown
+                      if (height < 50) height = 50;
                       const top = (startDecimal / 24) * 1200;
-                      const height = ((endDecimal - startDecimal) / 24) * 1200;
                       
                       // Get member info for display
                       const member = members.find(m => m.user_id === unavailability.user_id);
@@ -358,10 +360,10 @@ export default function TeamCalendarPage() {
                             isCurrentUser ? 'cursor-context-menu hover:opacity-90' : 'pointer-events-none'
                           }`}
                           style={{
-                            left: `${60 + (memberIndex * 10)}px`,
+                            left: '60px',
                             width: 'calc(100% - 80px)',
                             top: `${top}px`,
-                            height: `${Math.max(height, 40)}px`,
+                            height: `${height}px`,
                             zIndex: 10 + memberIndex,
                             opacity: 0.85,
                           }}
@@ -396,8 +398,9 @@ export default function TeamCalendarPage() {
                             key={`event-${event.id}-${eventIndex}`}
                             className="absolute border-2 border-green-600 bg-green-100/90 rounded-md flex items-center px-2 py-1 text-xs font-bold text-green-800"
                             style={{
-                              left: '60px', // Same left position as unavailability rectangles
-                              width: 'calc(100% - 80px)', // Same width calculation as unavailability rectangles
+                              // Uniform left and width for all rectangles
+                              left: '60px',
+                              width: 'calc(100% - 80px)',
                               top: `${top}px`,
                               height: `${Math.max(height, 40)}px`,
                               zIndex: 50, // Higher z-index to appear above unavailability
@@ -484,7 +487,7 @@ export default function TeamCalendarPage() {
                                 </div>
                               )}
                             </div>
-                          );
+                        );
                         })
                     )}
                   </div>

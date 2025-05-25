@@ -59,12 +59,12 @@ const Dashboard = () => {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="sm">
+              {/* <Button variant="ghost" size="sm">
                 <Bell className="h-4 w-4" />
               </Button>
               <Button variant="ghost" size="sm">
                 <Settings className="h-4 w-4" />
-              </Button>
+              </Button> */}
               <Button variant="ghost" size="sm" onClick={handleSignOut}>
                 <LogOut className="h-4 w-4" />
                 Sign Out

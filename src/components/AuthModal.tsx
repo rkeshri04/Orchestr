@@ -97,7 +97,7 @@ export const AuthModal = ({ isOpen, onClose, mode, onModeSwitch }: AuthModalProp
           </DialogTitle>
           <DialogDescription>
             {mode === 'login' 
-              ? 'Sign in to your IntelliSchedule account'
+              ? 'Sign in to your Orchestr account'
               : 'Start scheduling smarter with AI'
             }
           </DialogDescription>
