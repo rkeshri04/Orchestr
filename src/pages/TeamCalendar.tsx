@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 
 const userColors = [
   "bg-blue-400/60 border-blue-500",
@@ -30,23 +31,11 @@ const userColors = [
 export default function TeamCalendarPage() {
   const { teamId } = useParams();
   const navigate = useNavigate();
-  const { groups } = useGroups();
-  const group = groups?.find(g => g.id === teamId);
+  
+  // All hooks must be called at the top level
+  const { groups, isLoading: isLoadingGroups } = useGroups();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDialog, setShowDialog] = useState(false);
-  const { data: members = [] } = useGroupMembers(group?.id);
-  const selectedDateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined;
-  const { data: availabilities = [] } = useMemberUnavailability(group?.id, selectedDateStr);
-  const { data: events = [] } = useEvents(group?.id);
-  
-  console.log('Current members:', members);
-  console.log('Current availabilities:', availabilities);
-  console.log('Current events:', events);
-  console.log('Selected date:', selectedDateStr);
-  
-  const memberColorMap = Object.fromEntries(
-    members.map((m, i) => [m.user_id, userColors[i % userColors.length]])
-  );
   const { user } = useAuth();
   const setUnavailability = useSetUnavailability();
   const deleteUnavailability = useDeleteUnavailability();
@@ -56,7 +45,6 @@ export default function TeamCalendarPage() {
   const [dragStart, setDragStart] = useState<number | null>(null);
   const [dragEnd, setDragEnd] = useState<number | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  // Store confirmed time range separately to avoid state loss during modal open/close
   const [confirmedTimeRange, setConfirmedTimeRange] = useState<{start: number; end: number; visualEnd?: number} | null>(null);
 
   // Context menu state
@@ -70,6 +58,85 @@ export default function TeamCalendarPage() {
   const [editingUnavailability, setEditingUnavailability] = useState<any | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editTimeRange, setEditTimeRange] = useState<{start: number; end: number} | null>(null);
+
+  // Find group after hooks are initialized
+  const group = groups?.find(g => g.id === teamId);
+  
+  // Data hooks that depend on group
+  const { data: members = [] } = useGroupMembers(group?.id);
+  const selectedDateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined;
+  const { data: availabilities = [] } = useMemberUnavailability(group?.id, selectedDateStr);
+  const { data: events = [] } = useEvents(group?.id);
+  
+  console.log('Current members:', members);
+  console.log('Current availabilities:', availabilities);
+  console.log('Current events:', events);
+  console.log('Selected date:', selectedDateStr);
+  
+  const memberColorMap = Object.fromEntries(
+    members.map((m, i) => [m.user_id, userColors[i % userColors.length]])
+  );
+
+  // Show loading while groups are being fetched
+  if (isLoadingGroups) {
+    return (
+      <div className="w-full h-screen flex flex-col bg-background">
+        <div className="flex items-center gap-2 p-4 border-b bg-white/80">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+            <ArrowLeft />
+          </Button>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <LucideCalendar className="h-6 w-6 text-blue-500" />
+            Loading Team Calendar...
+          </h2>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <Card className="w-full max-w-md">
+            <CardContent className="flex flex-col items-center p-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
+              <p className="text-gray-600">Loading team information...</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if group not found after loading
+  if (!group) {
+    return (
+      <div className="w-full h-screen flex flex-col bg-background">
+        <div className="flex items-center gap-2 p-4 border-b bg-white/80">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+            <ArrowLeft />
+          </Button>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <LucideCalendar className="h-6 w-6 text-blue-500" />
+            Team Not Found
+          </h2>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <Card className="w-full max-w-md text-center">
+            <CardContent className="p-8">
+              <LucideCalendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Team Not Found</h3>
+              <p className="text-gray-500 mb-4">
+                The team you're looking for doesn't exist or you don't have access to it.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <Button variant="outline" onClick={() => navigate(-1)}>
+                  Go Back
+                </Button>
+                <Button onClick={() => navigate('/dashboard')}>
+                  Go to Dashboard
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   // Helper to convert time string to decimal hours
   const timeToDecimal = (timeStr: string): number => {

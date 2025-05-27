@@ -47,7 +47,7 @@ export const AuthModal = ({ isOpen, onClose, mode, onModeSwitch }: AuthModalProp
           title: mode === 'login' ? "Welcome back!" : "Account created!",
           description: mode === 'login' 
             ? "You've been successfully signed in." 
-            : "Your account has been created successfully.",
+            : "Your account has been created successfully. Please check your email for verification.",
         });
         onClose();
         // Reset form

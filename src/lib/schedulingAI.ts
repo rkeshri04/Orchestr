@@ -703,6 +703,9 @@ export class SchedulingAI {
   // Main scheduling function (kept for backward compatibility)
   async findSchedulingSuggestions(userInput: string): Promise<SchedulingSuggestion[]> {
     try {
+      // Declare suggestions array to collect results
+      const suggestions: SchedulingSuggestion[] = [];
+
       // Parse the user input
       const request = this.parseSchedulingRequest(userInput);
       console.log('Parsed request:', request);
@@ -714,8 +717,6 @@ export class SchedulingAI {
       if (relevantGroups.length === 0) {
         return [];
       }
-
-      const suggestions: SchedulingSuggestion[] = [];
 
       // Generate suggestions for each relevant group
       for (const group of relevantGroups.slice(0, 3)) { // Limit to top 3 groups
@@ -734,6 +735,13 @@ export class SchedulingAI {
 
         // Filter by time preference
         commonSlots = this.filterByTimePreference(commonSlots, request.timePreference);
+
+        // Filter out slots that are in the past
+        const now = new Date();
+        commonSlots = commonSlots.filter(slot => {
+          const slotStart = new Date(`${slot.date}T${slot.startTime}`);
+          return slotStart >= now;
+        });
 
         // Sort by confidence (more available members = higher confidence)
         commonSlots.sort((a, b) => {
