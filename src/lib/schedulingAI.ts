@@ -3,6 +3,19 @@ import { format, addDays, startOfDay, isAfter, isBefore, addHours, parseISO } fr
 import type { GroupMember, Busy } from '@/hooks/useGroupMembers';
 import type { Group } from '@/hooks/useGroups';
 
+// Add Event type definition
+export interface Event {
+  id: string;
+  title: string;
+  description?: string;
+  start_time: string;
+  end_time: string;
+  group_id: string;
+  created_by: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface SchedulingSuggestion {
   id: string;
   title: string;
@@ -38,6 +51,7 @@ export interface SchedulingContext {
   groups: Group[];
   userGroups: Group[];
   currentUser: any;
+  events?: Event[]; // Add events to context
 }
 
 // Time slot utility functions
@@ -312,6 +326,36 @@ export class SchedulingAI {
     return availabilityData || [];
   }
 
+  // Get events for a specific date range
+  async getGroupEvents(groupId: string, startDate: Date, endDate: Date): Promise<any[]> {
+    // If events are provided in context, filter them
+    if (this.context.events) {
+      return this.context.events.filter(event => {
+        const eventStartTime = new Date(event.start_time);
+        const eventDate = new Date(eventStartTime.getFullYear(), eventStartTime.getMonth(), eventStartTime.getDate());
+        const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+        const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+        
+        return event.group_id === groupId && eventDate >= start && eventDate <= end;
+      });
+    }
+
+    // Fallback to database query
+    const { data: eventsData, error } = await supabase
+      .from('events')
+      .select('*')
+      .eq('group_id', groupId)
+      .gte('start_time', startDate.toISOString())
+      .lte('start_time', endDate.toISOString());
+      
+    if (error) {
+      console.error('Error fetching events:', error);
+      return [];
+    }
+
+    return eventsData || [];
+  }
+
   // Find common availability slots (free time when users are NOT busy)
   findCommonUnavailability(busySlots: Busy[], members: GroupMember[], duration: number, startDate: Date, endDate: Date): {
     date: string;
@@ -368,6 +412,167 @@ export class SchedulingAI {
         timeSlots.forEach(slot => {
           if (slot.time >= startMinutes && slot.time < endMinutes) {
             slot.busyUsers.add(busy.user_id);
+          }
+        });
+      });
+
+      // Find continuous slots where most members are FREE (not busy)
+      for (let i = 0; i < timeSlots.length - (duration / 30) + 1; i++) {
+        const slotsNeeded = duration / 30;
+        let busyUsersInSlot: Set<string> = new Set();
+        
+        // Check if the required duration fits and collect all busy users
+        let canFit = true;
+        for (let j = 0; j < slotsNeeded; j++) {
+          const slot = timeSlots[i + j];
+          if (!slot) {
+            canFit = false;
+            break;
+          }
+          
+          // Union of busy users across all slots in this duration
+          slot.busyUsers.forEach(userId => busyUsersInSlot.add(userId));
+        }
+
+        if (canFit) {
+          // Calculate how many members are available (not busy)
+          const availableCount = members.length - busyUsersInSlot.size;
+          
+          // Require at least 50% of members to be available
+          if (availableCount >= Math.ceil(members.length * 0.5)) {
+            const startTime = minutesToTime(timeSlots[i].time);
+            const endTime = minutesToTime(timeSlots[i].time + duration);
+            
+            const availableMembers: string[] = [];
+            const conflictingMembers: string[] = [];
+            
+            members.forEach(member => {
+              if (!busyUsersInSlot.has(member.user_id)) {
+                // User is NOT busy, so they're available
+                availableMembers.push(member.profile?.full_name || member.profile?.email || 'Unknown');
+              } else {
+                // User is busy, so they have a conflict
+                conflictingMembers.push(member.profile?.full_name || member.profile?.email || 'Unknown');
+              }
+            });
+
+            commonSlots.push({
+              date,
+              startTime,
+              endTime,
+              availableMembers,
+              conflictingMembers
+            });
+          }
+        }
+      }
+    }
+
+    return commonSlots;
+  }
+
+  // Enhanced conflict detection that includes both busy slots and events
+  async findCommonAvailabilityWithEvents(
+    busySlots: Busy[], 
+    events: any[],
+    members: GroupMember[], 
+    duration: number, 
+    startDate: Date, 
+    endDate: Date
+  ): Promise<{
+    date: string;
+    startTime: string;
+    endTime: string;
+    availableMembers: string[];
+    conflictingMembers: string[];
+  }[]> {
+    // Group busy slots by date
+    const busyByDate = new Map<string, Busy[]>();
+    
+    busySlots.forEach(busy => {
+      const date = busy.date;
+      if (!busyByDate.has(date)) {
+        busyByDate.set(date, []);
+      }
+      busyByDate.get(date)!.push(busy);
+    });
+
+    // Group events by date
+    const eventsByDate = new Map<string, any[]>();
+    
+    events.forEach(event => {
+      const eventStartTime = new Date(event.start_time);
+      const date = format(eventStartTime, 'yyyy-MM-dd');
+      if (!eventsByDate.has(date)) {
+        eventsByDate.set(date, []);
+      }
+      eventsByDate.get(date)!.push(event);
+    });
+
+    const commonSlots: {
+      date: string;
+      startTime: string;
+      endTime: string;
+      availableMembers: string[];
+      conflictingMembers: string[];
+    }[] = [];
+
+    // Generate dates based on provided range
+    const allDates: string[] = [];
+    
+    for (let d = new Date(startDate); d <= endDate; d = addDays(d, 1)) {
+      allDates.push(format(d, 'yyyy-MM-dd'));
+    }
+
+    // For each date, find free time slots considering both busy slots and events
+    for (const date of allDates) {
+      const dayBusySlots = busyByDate.get(date) || [];
+      const dayEvents = eventsByDate.get(date) || [];
+      
+      // Create time slots for the day (every 30 minutes from 6 AM to 11 PM)
+      const timeSlots: { time: number; busyUsers: Set<string> }[] = [];
+      
+      for (let minutes = 6 * 60; minutes <= 23 * 60; minutes += 30) {
+        timeSlots.push({
+          time: minutes,
+          busyUsers: new Set()
+        });
+      }
+
+      // Mark busy times for each user from unavailability with 30-minute buffer after busy periods
+      dayBusySlots.forEach(busy => {
+        const startMinutes = timeToMinutes(busy.start_time);
+        const endMinutes = timeToMinutes(busy.end_time);
+        
+        // Add 30-minute buffer after the busy period ends
+        const bufferedEndMinutes = endMinutes + 30;
+        
+        timeSlots.forEach(slot => {
+          if (slot.time >= startMinutes && slot.time < bufferedEndMinutes) {
+            slot.busyUsers.add(busy.user_id);
+          }
+        });
+      });
+
+      // Mark busy times for all group members during events (events affect everyone)
+      dayEvents.forEach(event => {
+        const eventStartTime = new Date(event.start_time);
+        const eventEndTime = new Date(event.end_time);
+        
+        const startMinutes = eventStartTime.getHours() * 60 + eventStartTime.getMinutes();
+        const endMinutes = eventEndTime.getHours() * 60 + eventEndTime.getMinutes();
+        
+        // Add buffer time around events (30 minutes before and after instead of 60)
+        const bufferMinutes = 30;
+        const bufferedStartMinutes = Math.max(6 * 60, startMinutes - bufferMinutes);
+        const bufferedEndMinutes = Math.min(23 * 60, endMinutes + bufferMinutes);
+        
+        timeSlots.forEach(slot => {
+          if (slot.time >= bufferedStartMinutes && slot.time < bufferedEndMinutes) {
+            // Mark all group members as busy during event + buffer time
+            members.forEach(member => {
+              slot.busyUsers.add(member.user_id);
+            });
           }
         });
       });
@@ -578,8 +783,11 @@ export class SchedulingAI {
         // Get busy slots (unavailability) for the group
         const busySlots = await this.getGroupUnavailability(group.id, startDate, endDate);
 
-        // Find common free time slots
-        let commonSlots = this.findCommonUnavailability(busySlots, members, 60, startDate, endDate); // Use 60 minutes as default for availability check
+        // Get events for the group
+        const events = await this.getGroupEvents(group.id, startDate, endDate);
+
+        // Find common free time slots including events consideration
+        let commonSlots = await this.findCommonAvailabilityWithEvents(busySlots, events, members, 60, startDate, endDate); // Use 60 minutes as default for availability check
 
         // Filter by time preference if specified
         if (request.timePreference) {
@@ -595,7 +803,7 @@ export class SchedulingAI {
           slotsByDate.get(slot.date)!.push(slot);
         });
 
-        // Convert to availability info format - show only actual available time slots
+        // Convert to availability info format
         const availableSlots = Array.from(slotsByDate.entries()).map(([date, slots]) => {
           // Sort slots by time
           const sortedSlots = slots.sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
@@ -730,8 +938,11 @@ export class SchedulingAI {
         // Get busy slots (unavailability) for the group
         const busySlots = await this.getGroupUnavailability(group.id, startDate, endDate);
 
-        // Find common free time slots
-        let commonSlots = this.findCommonUnavailability(busySlots, members, request.duration, startDate, endDate);
+        // Get events for the group
+        const events = await this.getGroupEvents(group.id, startDate, endDate);
+
+        // Find common free time slots considering both busy slots and events
+        let commonSlots = await this.findCommonAvailabilityWithEvents(busySlots, events, members, request.duration, startDate, endDate);
 
         // Filter by time preference
         commonSlots = this.filterByTimePreference(commonSlots, request.timePreference);
@@ -750,8 +961,50 @@ export class SchedulingAI {
           return confidenceB - confidenceA;
         });
 
-        // Create suggestions from top slots
-        commonSlots.slice(0, 2).forEach((slot, index) => {
+        // Helper function to check if two time slots have at least 60 minutes gap
+        const hasMinimumGap = (slot1: typeof commonSlots[0], slot2: typeof commonSlots[0]): boolean => {
+          const slot1Start = new Date(`${slot1.date}T${slot1.startTime}`);
+          const slot1End = new Date(`${slot1.date}T${slot1.endTime}`);
+          const slot2Start = new Date(`${slot2.date}T${slot2.startTime}`);
+          const slot2End = new Date(`${slot2.date}T${slot2.endTime}`);
+          
+          // Calculate the gap between the end of the earlier slot and start of the later slot
+          let earlierEnd: Date, laterStart: Date;
+          
+          if (slot1Start <= slot2Start) {
+            earlierEnd = slot1End;
+            laterStart = slot2Start;
+          } else {
+            earlierEnd = slot2End;
+            laterStart = slot1Start;
+          }
+          
+          const gapInMilliseconds = laterStart.getTime() - earlierEnd.getTime();
+          const gapInMinutes = gapInMilliseconds / (1000 * 60);
+          
+          console.log(`Gap check: ${format(earlierEnd, 'HH:mm')} to ${format(laterStart, 'HH:mm')} = ${gapInMinutes} minutes`);
+          
+          return gapInMinutes >= 60; // Require at least 60 minutes gap
+        };
+
+        // Create suggestions from top slots with 60-minute spacing
+        const selectedSlots: typeof commonSlots = [];
+        
+        for (const slot of commonSlots) {
+          // Check if this slot has at least 60 minutes gap from all previously selected slots
+          const hasConflict = selectedSlots.some(selectedSlot => !hasMinimumGap(slot, selectedSlot));
+          
+          if (!hasConflict) {
+            selectedSlots.push(slot);
+            console.log(`Selected slot: ${slot.date} ${slot.startTime}-${slot.endTime}`);
+            if (selectedSlots.length >= 2) break; // Limit to 2 suggestions per group
+          } else {
+            console.log(`Rejected slot due to insufficient gap: ${slot.date} ${slot.startTime}-${slot.endTime}`);
+          }
+        }
+
+        // Create suggestions from selected slots
+        selectedSlots.forEach((slot, index) => {
           const confidence = Math.round((slot.availableMembers.length / members.length) * 100);
           const startDateTime = new Date(`${slot.date}T${slot.startTime}`);
           const endDateTime = new Date(`${slot.date}T${slot.endTime}`);
