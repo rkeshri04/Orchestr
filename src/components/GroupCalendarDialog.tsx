@@ -22,7 +22,7 @@ enum Step {
   Review = 3,
 }
 
-export const GroupCalendarDialog = ({ open, onOpenChange, group }: GroupCalendarDialogProps) => {
+export function GroupCalendarDialog({ open, onOpenChange, group }: GroupCalendarDialogProps) {
   const [step, setStep] = useState<Step>(Step.SelectDate);
   const [selected, setSelected] = useState<Date | undefined>(undefined);
   const { user } = useAuth();
@@ -40,9 +40,32 @@ export const GroupCalendarDialog = ({ open, onOpenChange, group }: GroupCalendar
     return date < today;
   };
 
-  // Disable past dates in calendar
+  // Helper to check if a specific time on a date has passed
+  const isPastDateTime = (date: Date, timeStr: string): boolean => {
+    const now = new Date();
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const selectedDateTime = new Date(date);
+    selectedDateTime.setHours(hours, minutes, 0, 0);
+    
+    return selectedDateTime <= now;
+  };
+
+  // Helper to get minimum time for today
+  const getMinTimeForDate = (date: Date): string => {
+    const today = new Date();
+    const isToday = date.toDateString() === today.toDateString();
+    
+    if (!isToday) return "00:00";
+    
+    const minHour = Math.ceil((today.getHours() + today.getMinutes() / 60 + 1));
+    return `${Math.min(minHour, 23).toString().padStart(2, '0')}:00`;
+  };
+
+  // Helper function to disable past dates
   const isDateDisabled = (date: Date): boolean => {
-    return isPastDate(date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date < today;
   };
 
   // Step 1: Select date - only allow future dates
@@ -169,6 +192,7 @@ export const GroupCalendarDialog = ({ open, onOpenChange, group }: GroupCalendar
                       value={tf.start}
                       onChange={e => handleTimeChange(idx, 'start', e.target.value)}
                       className="border rounded px-2 py-1"
+                      min={selected ? getMinTimeForDate(selected) : "00:00"}
                     />
                     <span>to</span>
                     <input
@@ -176,10 +200,14 @@ export const GroupCalendarDialog = ({ open, onOpenChange, group }: GroupCalendar
                       value={tf.end}
                       onChange={e => handleTimeChange(idx, 'end', e.target.value)}
                       className="border rounded px-2 py-1"
+                      min={tf.start || (selected ? getMinTimeForDate(selected) : "00:00")}
                     />
                     <Button size="icon" variant="ghost" onClick={() => handleRemoveTimeFrame(idx)} disabled={timeFrames.length === 1}>
                       <Trash2 className="h-4 w-4 text-red-500" />
                     </Button>
+                    {tf.start && selected && isPastDateTime(selected, tf.start) && (
+                      <p className="text-xs text-red-500 col-span-3">This time has already passed</p>
+                    )}
                   </div>
                 ))}
                 <Button size="sm" variant="outline" onClick={handleAddTimeFrame} className="mt-2">
@@ -188,7 +216,15 @@ export const GroupCalendarDialog = ({ open, onOpenChange, group }: GroupCalendar
               </div>
               <div className="flex justify-between gap-2">
                 <Button onClick={handleBack} variant="outline">Back</Button>
-                <Button onClick={handleTimeFramesNext} disabled={timeFrames.some(tf => !tf.start || !tf.end)}>Next</Button>
+                <Button 
+                  onClick={handleTimeFramesNext} 
+                  disabled={
+                    timeFrames.some(tf => !tf.start || !tf.end) ||
+                    (selected && timeFrames.some(tf => tf.start && isPastDateTime(selected, tf.start)))
+                  }
+                >
+                  Next
+                </Button>
               </div>
             </div>
           )}

@@ -58,10 +58,38 @@ export const EditEventDialog = ({ open, onOpenChange, event, groupId }: EditEven
         date: eventStartTime,
         startTime: format(eventStartTime, 'HH:mm'),
         endTime: format(eventEndTime, 'HH:mm'),
-        selectedParticipants: [], // TODO: Load existing participants when we have event-participant relationship
+        selectedParticipants: [],
       });
     }
   }, [event]);
+
+  // Helper to check if a date is in the past
+  const isPastDate = (date: Date): boolean => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date < today;
+  };
+
+  // Helper to check if a specific time on a date has passed
+  const isPastDateTime = (date: Date, timeStr: string): boolean => {
+    const now = new Date();
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const selectedDateTime = new Date(date);
+    selectedDateTime.setHours(hours, minutes, 0, 0);
+    
+    return selectedDateTime <= now;
+  };
+
+  // Helper to get minimum time for today
+  const getMinTimeForDate = (date: Date): string => {
+    const today = new Date();
+    const isToday = date.toDateString() === today.toDateString();
+    
+    if (!isToday) return "00:00";
+    
+    const minHour = Math.ceil((today.getHours() + today.getMinutes() / 60 + 1));
+    return `${Math.min(minHour, 23).toString().padStart(2, '0')}:00`;
+  };
 
   // Reset form when dialog opens/closes
   useEffect(() => {
@@ -191,7 +219,11 @@ export const EditEventDialog = ({ open, onOpenChange, event, groupId }: EditEven
                     type="time"
                     value={formData.startTime}
                     onChange={(e) => setFormData(prev => ({ ...prev, startTime: e.target.value }))}
+                    min={getMinTimeForDate(formData.date)}
                   />
+                  {formData.startTime && isPastDateTime(formData.date, formData.startTime) && (
+                    <p className="text-xs text-red-500">This time has already passed</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -201,6 +233,7 @@ export const EditEventDialog = ({ open, onOpenChange, event, groupId }: EditEven
                     type="time"
                     value={formData.endTime}
                     onChange={(e) => setFormData(prev => ({ ...prev, endTime: e.target.value }))}
+                    min={formData.startTime || getMinTimeForDate(formData.date)}
                   />
                 </div>
               </div>
@@ -209,7 +242,14 @@ export const EditEventDialog = ({ open, onOpenChange, event, groupId }: EditEven
                 <Button variant="outline" onClick={() => onOpenChange(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleNext} disabled={!canProceed}>
+                <Button 
+                  onClick={handleNext} 
+                  disabled={
+                    !canProceed || 
+                    isPastDate(formData.date) ||
+                    isPastDateTime(formData.date, formData.startTime)
+                  }
+                >
                   Next
                   <ArrowRight className="h-4 w-4 ml-1" />
                 </Button>

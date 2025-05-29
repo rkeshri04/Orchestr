@@ -166,12 +166,52 @@ export default function TeamCalendarPage() {
     return `${hours}:00`;
   };
 
+  // Helper to get time string from hour and minute
+  const timeToString = (hour: number, minute: number = 0): string => {
+    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+  };
+
+  // Helper to get the effective start time for drag selection
+  const getEffectiveStartTime = (hour: number): { hour: number; minute: number } => {
+    const currentMinute = getCurrentMinuteInHour(selectedDate, hour);
+    if (currentMinute !== null) {
+      // If we're in the current hour, start from next minute
+      const nextMinute = currentMinute + 1;
+      if (nextMinute >= 60) {
+        return { hour: hour + 1, minute: 0 };
+      }
+      return { hour, minute: nextMinute };
+    }
+    return { hour, minute: 0 };
+  };
+
+  // Helper to get the effective start hour for drag selection
+  const getEffectiveStartHour = (hour: number): number => {
+    const currentMinute = getCurrentMinuteInHour(selectedDate, hour);
+    if (currentMinute !== null && currentMinute > 0) {
+      // If we're in the middle of the current hour, start from next hour
+      return hour + 1;
+    }
+    return hour;
+  };
+
   // Helper to check if a date is in the past
   const isPastDate = (date: Date | null): boolean => {
     if (!date) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return date < today;
+  };
+
+  // Helper to check if a specific time on the selected date has passed
+  const isPastDateTime = (date: Date | null, hour: number, minute: number = 0): boolean => {
+    if (!date) return false;
+    
+    const now = new Date();
+    const selectedDateTime = new Date(date);
+    selectedDateTime.setHours(hour, minute, 0, 0);
+    
+    return selectedDateTime <= now;
   };
 
   // Helper to check if a time slot already has unavailability for current user
@@ -182,16 +222,60 @@ export default function TeamCalendarPage() {
       if (unavailability.user_id !== user.id) return false;
       
       const startHour = Math.floor(timeToDecimal(unavailability.start_time));
-      const endHour = Math.floor(timeToDecimal(unavailability.end_time)); // changed from Math.ceil to Math.floor
+      const endHour = Math.floor(timeToDecimal(unavailability.end_time));
       
-      return hour >= startHour && hour < endHour; // only block up to but not including endHour
+      return hour >= startHour && hour < endHour;
     });
   };
 
-  // Handle mouse events for drag selection - only allow for future dates and free time slots
+  // Helper to get current minute within an hour if it's the current hour
+  const getCurrentMinuteInHour = (date: Date | null, hour: number): number | null => {
+    if (!date) return null;
+    
+    const now = new Date();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDay = new Date(date);
+    selectedDay.setHours(0, 0, 0, 0);
+    
+    // Only return current minute if it's today and the current hour
+    if (selectedDay.getTime() === today.getTime() && now.getHours() === hour) {
+      return now.getMinutes();
+    }
+    
+    return null;
+  };
+
+  // Helper to check if a time slot is available for selection (not past and no existing unavailability)
+  const isTimeSlotAvailable = (hour: number): boolean => {
+    if (isPastDate(selectedDate)) return false;
+    if (isPastDateTime(selectedDate, hour, 59)) return false; // Check end of hour
+    if (hasUnavailabilityAtHour(hour)) return false;
+    return true;
+  };
+
+  // Helper to check if current hour has partial availability
+  const getPartialHourAvailability = (hour: number): { available: boolean; currentMinute?: number } => {
+    if (isPastDate(selectedDate)) return { available: false };
+    
+    const currentMinute = getCurrentMinuteInHour(selectedDate, hour);
+    if (currentMinute !== null) {
+      // Current hour - check if there's time remaining
+      return { 
+        available: currentMinute < 59, 
+        currentMinute: currentMinute 
+      };
+    }
+    
+    // Not current hour - check normally
+    return { 
+      available: !isPastDateTime(selectedDate, hour, 0) && !hasUnavailabilityAtHour(hour) 
+    };
+  };
+
+  // Handle mouse events for drag selection - only allow for future dates and available time slots
   const handleGridMouseDown = (e: React.MouseEvent, hour: number) => {
-    if (isPastDate(selectedDate)) return; // Prevent dragging on past dates
-    if (hasUnavailabilityAtHour(hour)) return; // Prevent dragging over existing unavailability
+    if (!isTimeSlotAvailable(hour)) return;
     
     console.log("Mouse down on hour:", hour);
     setDragStart(hour);
@@ -199,8 +283,7 @@ export default function TeamCalendarPage() {
   };
   
   const handleGridMouseEnter = (e: React.MouseEvent, hour: number) => {
-    if (isPastDate(selectedDate)) return; // Prevent dragging on past dates
-    if (hasUnavailabilityAtHour(hour)) return; // Prevent dragging over existing unavailability
+    if (!isTimeSlotAvailable(hour)) return;
     
     if (dragStart !== null) {
       console.log("Mouse enter on hour:", hour);
@@ -209,20 +292,26 @@ export default function TeamCalendarPage() {
   };
   
   const handleGridMouseUp = () => {
-    if (isPastDate(selectedDate)) return; // Prevent dragging on past dates
+    if (isPastDate(selectedDate)) return;
     
     if (dragStart !== null && dragEnd !== null && dragStart !== dragEnd) {
       const start = Math.min(dragStart, dragEnd);
-      const visualEnd = Math.max(dragStart, dragEnd); // This is what user sees and expects
+      const visualEnd = Math.max(dragStart, dragEnd);
       
-      // Store the visual range (what user expects to be saved)
+      // Validate that all selected time slots are available
+      for (let hour = start; hour <= visualEnd; hour++) {
+        if (!isTimeSlotAvailable(hour)) {
+          resetDrag();
+          return;
+        }
+      }
+      
       setConfirmedTimeRange({
         start: start,
-        end: visualEnd, // Store the visual end for saving
-        visualEnd: visualEnd // Store visual end for display (same value)
+        end: visualEnd,
+        visualEnd: visualEnd
       });
       
-      // Show the modal after storing the time range
       setShowConfirmModal(true);
     }
   };
@@ -237,12 +326,17 @@ export default function TeamCalendarPage() {
     
     const { start, end } = confirmedTimeRange;
     
+    // Get the effective start time (considering current minute)
+    const startTime = getEffectiveStartTime(start);
+    const startTimeStr = timeToString(startTime.hour, startTime.minute);
+    const endTimeStr = hourToTime(end); // Remove +1 to store exact selected time
+    
     setUnavailability.mutate({
       group_id: group.id,
       user_id: user.id,
       date: format(selectedDate, 'yyyy-MM-dd'),
-      start_time: hourToTime(start),
-      end_time: hourToTime(end), // This now saves the visual end time user expects
+      start_time: startTimeStr,
+      end_time: endTimeStr,
     });
     setShowConfirmModal(false);
     resetDrag();
@@ -435,12 +529,15 @@ export default function TeamCalendarPage() {
                     <div className="absolute left-0 top-0 w-full h-full grid grid-rows-24 border-r">
                       {[...Array(24)].map((_, h) => {
                         const hasCurrentUserUnavailability = hasUnavailabilityAtHour(h);
+                        const partialAvailability = getPartialHourAvailability(h);
+                        const isAvailable = partialAvailability.available && !hasCurrentUserUnavailability;
+                        const currentMinute = partialAvailability.currentMinute;
                         
                         return (
                           <div
                             key={h}
-                            className={`border-b border-dashed border-gray-200 text-xs text-gray-400 pl-2 flex items-center h-[50px] ${
-                              isPastDate(selectedDate) || hasCurrentUserUnavailability
+                            className={`border-b border-dashed border-gray-200 text-xs text-gray-400 pl-2 flex items-center h-[50px] relative ${
+                              !isAvailable
                                 ? 'cursor-not-allowed' 
                                 : 'cursor-pointer'
                             } ${
@@ -448,26 +545,64 @@ export default function TeamCalendarPage() {
                                 ? 'bg-gray-100/50'
                                 : ''
                             } ${
-                              !isPastDate(selectedDate) && !hasCurrentUserUnavailability && dragStart !== null && dragEnd !== null && h >= Math.min(dragStart, dragEnd) && h <= Math.max(dragStart, dragEnd)
+                              isAvailable && dragStart !== null && dragEnd !== null && h >= Math.min(dragStart, dragEnd) && h <= Math.max(dragStart, dragEnd)
                                 ? 'bg-blue-100/70'
                                 : ''
                             }`}
-                            onMouseDown={e => handleGridMouseDown(e, h)}
-                            onMouseEnter={e => handleGridMouseEnter(e, h)}
+                            onMouseDown={e => isAvailable ? handleGridMouseDown(e, h) : undefined}
+                            onMouseEnter={e => isAvailable ? handleGridMouseEnter(e, h) : undefined}
+                            title={
+                              !partialAvailability.available
+                                ? currentMinute !== undefined 
+                                  ? `This time has passed (current: ${h}:${currentMinute.toString().padStart(2, '0')})` 
+                                  : 'This time has already passed'
+                                : hasCurrentUserUnavailability 
+                                ? 'You already have unavailability at this time'
+                                : undefined
+                            }
                           >
-                            {h}:00
+                            {/* Past portion overlay for current hour */}
+                            {currentMinute !== undefined && (
+                              <div 
+                                className="absolute left-0 top-0 bg-red-50/70 border-r border-red-200 h-full flex items-center justify-center"
+                                style={{ 
+                                  width: `${(currentMinute / 60) * 100}%`,
+                                  zIndex: 1
+                                }}
+                              >
+                                <span className="text-red-400 text-xs font-medium">
+                                  Past
+                                </span>
+                              </div>
+                            )}
+                            
+                            <span className={!partialAvailability.available && currentMinute === undefined ? 'text-red-400' : ''}>
+                              {h}:00
+                              {currentMinute !== undefined && (
+                                <span className="text-green-600 ml-1 font-medium">
+                                  (:{currentMinute.toString().padStart(2, '0')} now)
+                                </span>
+                              )}
+                            </span>
                           </div>
                         );
                       })}
                     </div>
 
-                    {/* Show overlay message for past dates */}
-                    {isPastDate(selectedDate) && (
+                    {/* Show overlay message for past dates or if all remaining times are past */}
+                    {(isPastDate(selectedDate) || (selectedDate && [...Array(24)].every((_, h) => isPastDateTime(selectedDate, h)))) && (
                       <div className="absolute inset-0 flex items-center justify-center bg-gray-100/50 backdrop-blur-sm z-50">
                         <div className="text-center p-4 bg-white rounded-lg shadow border">
                           <LucideCalendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                          <p className="text-gray-600 font-medium">Cannot edit past dates</p>
-                          <p className="text-gray-500 text-sm">You can view existing unavailability but cannot create new slots</p>
+                          <p className="text-gray-600 font-medium">
+                            {isPastDate(selectedDate) ? 'Cannot edit past dates' : 'All available times have passed'}
+                          </p>
+                          <p className="text-gray-500 text-sm">
+                            {isPastDate(selectedDate) 
+                              ? 'You can view existing unavailability but cannot create new slots'
+                              : 'You can view existing data but cannot create new slots for past times'
+                            }
+                          </p>
                         </div>
                       </div>
                     )}
@@ -669,8 +804,17 @@ export default function TeamCalendarPage() {
             <div className="font-semibold text-blue-700 text-lg mt-3 mb-3 border border-gray-200 rounded-md p-2 bg-blue-50">
               {confirmedTimeRange && (
                 <>
-                  <p>From: <span className="text-black">{hourToTime(confirmedTimeRange.start)}</span></p>
-                  <p>To: <span className="text-black">{hourToTime(confirmedTimeRange.visualEnd ?? confirmedTimeRange.end)}</span></p>
+                  {(() => {
+                    const startTime = getEffectiveStartTime(confirmedTimeRange.start);
+                    const startTimeStr = timeToString(startTime.hour, startTime.minute);
+                    const endTimeStr = hourToTime(confirmedTimeRange.visualEnd ?? confirmedTimeRange.end); // Show exact selected time saved
+                    return (
+                      <>
+                        <p>From: <span className="text-black">{startTimeStr}</span></p>
+                        <p>To: <span className="text-black">{endTimeStr}</span></p>
+                      </>
+                    );
+                  })()}
                 </>
               )}
             </div>

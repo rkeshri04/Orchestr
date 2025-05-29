@@ -85,6 +85,28 @@ export const CreateEventDialog = ({ open, onOpenChange, group, initialDate }: Cr
     return date < today;
   };
 
+  // Helper to check if a specific time on a date has passed
+  const isPastDateTime = (date: Date, timeStr: string): boolean => {
+    const now = new Date();
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const selectedDateTime = new Date(date);
+    selectedDateTime.setHours(hours, minutes, 0, 0);
+    
+    return selectedDateTime <= now;
+  };
+
+  // Helper to get minimum time for today
+  const getMinTimeForDate = (date: Date): string => {
+    const today = new Date();
+    const isToday = date.toDateString() === today.toDateString();
+    
+    if (!isToday) return "00:00";
+    
+    // For today, minimum time is current time + 1 hour rounded up
+    const minHour = Math.ceil((today.getHours() + today.getMinutes() / 60 + 1));
+    return `${Math.min(minHour, 23).toString().padStart(2, '0')}:00`;
+  };
+
   // Disable past dates in calendar
   const isDateDisabled = (date: Date): boolean => {
     return isPastDate(date);
@@ -303,7 +325,11 @@ export const CreateEventDialog = ({ open, onOpenChange, group, initialDate }: Cr
                       value={formData.startTime}
                       onChange={(e) => handleStartTimeChange(e.target.value)}
                       className="mt-1"
+                      min={getMinTimeForDate(formData.date)}
                     />
+                    {formData.startTime && isPastDateTime(formData.date, formData.startTime) && (
+                      <p className="text-xs text-red-500 mt-1">This time has already passed</p>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="endTime">End Time</Label>
@@ -313,8 +339,11 @@ export const CreateEventDialog = ({ open, onOpenChange, group, initialDate }: Cr
                       value={formData.endTime}
                       onChange={(e) => handleEndTimeChange(e.target.value)}
                       className="mt-1"
-                      min={formData.startTime}
+                      min={formData.startTime || getMinTimeForDate(formData.date)}
                     />
+                    {formData.endTime && formData.startTime && isPastDateTime(formData.date, formData.startTime) && (
+                      <p className="text-xs text-red-500 mt-1">Start time has already passed</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -323,7 +352,14 @@ export const CreateEventDialog = ({ open, onOpenChange, group, initialDate }: Cr
                 <Button variant="outline" onClick={handleBack}>Back</Button>
                 <Button 
                   onClick={handleNext} 
-                  disabled={!formData.date || isPastDate(formData.date) || !formData.startTime || !formData.endTime || formData.endTime <= formData.startTime}
+                  disabled={
+                    !formData.date || 
+                    isPastDate(formData.date) || 
+                    !formData.startTime || 
+                    !formData.endTime || 
+                    formData.endTime <= formData.startTime ||
+                    isPastDateTime(formData.date, formData.startTime)
+                  }
                 >
                   Next
                 </Button>
