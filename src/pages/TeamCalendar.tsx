@@ -1,13 +1,13 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Calendar as LucideCalendar, ArrowLeft, Plus, Edit, Trash2 } from "lucide-react";
+import { Calendar as LucideCalendar, ArrowLeft, Plus, Edit, Trash2, ChevronDown } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { FullPageCalendar } from "@/components/ui/fullpage-calendar";
 import { Button } from "@/components/ui/button";
 import { useGroupMembers, useMemberUnavailability } from '@/hooks/useGroupMembers';
 import { GroupCalendarDialog } from "@/components/GroupCalendarDialog";
 import { useGroups } from '@/hooks/useGroups';
-import { useEvents } from '@/hooks/useEvents';
+import { useEvents, useDeleteEvent } from '@/hooks/useEvents';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useSetUnavailability, useDeleteUnavailability } from '@/hooks/useGroupMembers';
@@ -16,6 +16,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { CreateEventDialog } from "@/components/CreateEventDialog";
+import { EditEventDialog } from "@/components/EditEventDialog";
 
 const userColors = [
   "bg-blue-400/60 border-blue-500",
@@ -36,9 +44,11 @@ export default function TeamCalendarPage() {
   const { groups, isLoading: isLoadingGroups } = useGroups();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDialog, setShowDialog] = useState(false);
+  const [showCreateEventDialog, setShowCreateEventDialog] = useState(false);
   const { user } = useAuth();
   const setUnavailability = useSetUnavailability();
   const deleteUnavailability = useDeleteUnavailability();
+  const deleteEvent = useDeleteEvent();
   const queryClient = useQueryClient();
 
   // Drag-to-select state
@@ -51,13 +61,19 @@ export default function TeamCalendarPage() {
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
-    unavailability: any;
+    unavailability?: any;
+    event?: any;
+    type: 'unavailability' | 'event';
   } | null>(null);
   
   // Edit unavailability state
   const [editingUnavailability, setEditingUnavailability] = useState<any | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editTimeRange, setEditTimeRange] = useState<{start: number; end: number} | null>(null);
+
+  // Edit event state  
+  const [editingEvent, setEditingEvent] = useState<any | null>(null);
+  const [showEditEventModal, setShowEditEventModal] = useState(false);
 
   // Find group after hooks are initialized
   const group = groups?.find(g => g.id === teamId);
@@ -242,7 +258,24 @@ export default function TeamCalendarPage() {
       setContextMenu({
         x: e.clientX,
         y: e.clientY,
-        unavailability
+        unavailability,
+        type: 'unavailability'
+      });
+    }
+  };
+
+  // Handle right-click on event rectangle
+  const handleEventRightClick = (e: React.MouseEvent, event: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Only show context menu for events created by current user
+    if (event.created_by === user?.id) {
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        event,
+        type: 'event'
       });
     }
   };
@@ -254,7 +287,7 @@ export default function TeamCalendarPage() {
 
   // Handle edit unavailability
   const handleEditUnavailability = () => {
-    if (!contextMenu) return;
+    if (!contextMenu || contextMenu.type !== 'unavailability') return;
     
     const unavailability = contextMenu.unavailability;
     setEditingUnavailability(unavailability);
@@ -270,7 +303,7 @@ export default function TeamCalendarPage() {
 
   // Handle delete unavailability
   const handleDeleteUnavailability = () => {
-    if (!contextMenu) return;
+    if (!contextMenu || contextMenu.type !== 'unavailability') return;
     
     const unavailability = contextMenu.unavailability;
     deleteUnavailability.mutate(unavailability.id);
@@ -303,6 +336,27 @@ export default function TeamCalendarPage() {
     setEditTimeRange(null);
   };
 
+  // Handle edit event
+  const handleEditEvent = () => {
+    if (!contextMenu || contextMenu.type !== 'event') return;
+    
+    const event = contextMenu.event;
+    setEditingEvent(event);
+    setShowEditEventModal(true);
+    closeContextMenu();
+  };
+
+  // Handle delete event
+  const handleDeleteEvent = () => {
+    if (!contextMenu || contextMenu.type !== 'event') return;
+    
+    const event = contextMenu.event;
+    deleteEvent.mutate(event.id);
+    closeContextMenu();
+  };
+
+  // This function is no longer needed as we use EditEventDialog now
+
   // --- Main Render ---
   return (
     <div className="w-full h-screen flex flex-col bg-background" onClick={closeContextMenu}>
@@ -315,9 +369,25 @@ export default function TeamCalendarPage() {
         <div className="flex-1" />
         {/* Only show the button for future dates */}
         {!isPastDate(selectedDate) && (
-          <Button size="sm" className="ml-2" onClick={() => setShowDialog(true)}>
-            <Plus className="h-4 w-4 mr-1" /> Set Unavailability
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="ml-2">
+                <Plus className="h-4 w-4 mr-1" /> 
+                Create
+                <ChevronDown className="h-4 w-4 ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem className="cursor-pointer" onClick={() => setShowCreateEventDialog(true)}>
+                <LucideCalendar className="h-4 w-4 mr-2" />
+                Create Event
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer" onClick={() => setShowDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Set Unavailability
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
       
@@ -446,17 +516,19 @@ export default function TeamCalendarPage() {
                     {/* Event rectangles for scheduled events */}
                     {events
                       .filter(event => {
-                        // Only show events for the selected date
-                        const eventDate = format(new Date(event.start_time), 'yyyy-MM-dd');
+                        // Convert UTC time to local time for date comparison
+                        const eventStartTime = new Date(event.start_time);
+                        const eventDate = format(eventStartTime, 'yyyy-MM-dd');
                         return eventDate === selectedDateStr;
                       })
                       .map((event, eventIndex) => {
+                        // Convert UTC times to local times for display
                         const eventStartTime = new Date(event.start_time);
                         const eventEndTime = new Date(event.end_time);
                         
-                        // Calculate position based on time with same logic as unavailability rectangles
+                        // Calculate position based on local time 
                         const startDecimal = eventStartTime.getHours() + (eventStartTime.getMinutes() / 60);
-                        const endDecimal = eventEndTime.getHours() + (eventEndTime.getMinutes() / 60) + 1; // Add 1 hour for proper rectangle display
+                        const endDecimal = eventEndTime.getHours() + (eventEndTime.getMinutes() / 60);
                         const top = (startDecimal / 24) * 1200;
                         const height = ((endDecimal - startDecimal) / 24) * 1200;
                         
@@ -473,9 +545,10 @@ export default function TeamCalendarPage() {
                               zIndex: 50, // Higher z-index to appear above unavailability
                             }}
                             title={`${event.title}\n${event.description || ''}`}
+                            onContextMenu={e => handleEventRightClick(e, event)} // Add right-click handler for events
                           >
                             <span className="truncate">
-                              📅 {event.title} ({format(eventStartTime, 'HH:mm')} - {format(eventEndTime, 'HH:mm')})
+                              {event.title} ({format(eventStartTime, 'HH:mm')} - {format(eventEndTime, 'HH:mm')})
                             </span>
                           </div>
                         );
@@ -571,6 +644,13 @@ export default function TeamCalendarPage() {
         group={group}
       />
 
+      <CreateEventDialog
+        open={showCreateEventDialog}
+        onOpenChange={setShowCreateEventDialog}
+        group={group}
+        initialDate={selectedDate}
+      />
+
       {/* Confirmation modal for new unavailability */}
       <Dialog 
         open={showConfirmModal} 
@@ -618,20 +698,43 @@ export default function TeamCalendarPage() {
             top: contextMenu.y,
           }}
         >
-          <button
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-            onClick={handleEditUnavailability}
-          >
-            <Edit className="h-4 w-4" />
-            Edit Time
-          </button>
-          <button
-            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 text-red-600 flex items-center gap-2"
-            onClick={handleDeleteUnavailability}
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </button>
+          {contextMenu.type === 'unavailability' && (
+            <>
+              <button
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                onClick={handleEditUnavailability}
+              >
+                <Edit className="h-4 w-4" />
+                Edit Unavailability
+              </button>
+              <button
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 text-red-600 flex items-center gap-2"
+                onClick={handleDeleteUnavailability}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
+            </>
+          )}
+
+          {contextMenu.type === 'event' && (
+            <>
+              <button
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                onClick={handleEditEvent}
+              >
+                <Edit className="h-4 w-4" />
+                Edit Event
+              </button>
+              <button
+                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 text-red-600 flex items-center gap-2"
+                onClick={handleDeleteEvent}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -685,6 +788,19 @@ export default function TeamCalendarPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Event Modal */}
+      <EditEventDialog 
+        open={showEditEventModal} 
+        onOpenChange={(open) => {
+          setShowEditEventModal(open);
+          if (!open) {
+            setEditingEvent(null);
+          }
+        }}
+        event={editingEvent}
+        groupId={group?.id || ''}
+      />
     </div>
   );
 }

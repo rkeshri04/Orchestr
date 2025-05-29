@@ -82,3 +82,80 @@ export function useEvents(groupId?: string) {
     },
   });
 }
+
+export function useUpdateEvent() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (eventData: {
+      id: string;
+      title: string;
+      description?: string;
+      start_time: string;
+      end_time: string;
+    }) => {
+      if (!user) throw new Error('User not authenticated');
+
+      const { data, error } = await supabase
+        .from('events')
+        .update({
+          title: eventData.title,
+          description: eventData.description || null,
+          start_time: eventData.start_time,
+          end_time: eventData.end_time,
+        })
+        .eq('id', eventData.id)
+        .eq('created_by', user.id) // Only allow updating own events
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating event:', error);
+        throw error;
+      }
+
+      return data as Event;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      toast.success('Event updated successfully!');
+    },
+    onError: (error) => {
+      console.error('Error updating event:', error);
+      toast.error('Failed to update event');
+    }
+  });
+}
+
+export function useDeleteEvent() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (eventId: string) => {
+      if (!user) throw new Error('User not authenticated');
+
+      const { error } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', eventId)
+        .eq('created_by', user.id); // Only allow deleting own events
+
+      if (error) {
+        console.error('Error deleting event:', error);
+        throw error;
+      }
+
+      return eventId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      toast.success('Event deleted successfully!');
+    },
+    onError: (error) => {
+      console.error('Error deleting event:', error);
+      toast.error('Failed to delete event');
+    }
+  });
+}
