@@ -45,7 +45,7 @@ export const AISchedulingChat = () => {
     {
       id: '1',
       type: 'ai',
-      content: "Hi! I'm your AI scheduling assistant. I can help you find the perfect time for any group activity, considering both individual availability and existing events. Just tell me what you need to schedule!\n\n💡 I now take into account:\n• Individual busy times with 30-minute buffers\n• Scheduled events in your groups\n• Buffer time around events (30 minutes)\n• 60-minute spacing between my suggestions\n• Smart conflict resolution",
+      content: "Hi! I'm your AI scheduling assistant. I can help you find the perfect time for any group activity, considering both individual availability and existing events. Just tell me what you need to schedule!",
       timestamp: new Date(Date.now() - 5 * 60 * 1000)
     }
   ]);
@@ -219,9 +219,6 @@ export const AISchedulingChat = () => {
             <div className="flex items-center space-x-2">
               <Sparkles className="h-5 w-5 text-purple-500" />
               <CardTitle>AI Scheduling Assistant</CardTitle>
-              <Badge variant="secondary" className="text-xs">
-                Event-Aware
-              </Badge>
             </div>
             <CardDescription>
               Tell me what you'd like to schedule in plain English. I'll consider both individual availability and existing events with smart buffer periods.
@@ -236,12 +233,6 @@ export const AISchedulingChat = () => {
           <CardHeader className="flex-shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Chat</CardTitle>
-              {allEvents.length > 0 && (
-                <Badge variant="outline" className="text-xs flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {allEvents.length} event{allEvents.length > 1 ? 's' : ''} tracked
-                </Badge>
-              )}
             </div>
           </CardHeader>
           <CardContent className="flex-1 min-h-0 flex flex-col p-0">
@@ -502,12 +493,7 @@ export const AISchedulingChat = () => {
                   <Send className="h-4 w-4" />
                 </Button>
               </div>
-              {allEvents.length > 0 && (
-                <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  Tracking {allEvents.length} event{allEvents.length > 1 ? 's' : ''} across your groups for intelligent scheduling
-                </p>
-              )}
+              
             </div>
           </CardContent>
         </Card>

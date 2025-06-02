@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CreateEventDialog } from "@/components/CreateEventDialog";
 import { EditEventDialog } from "@/components/EditEventDialog";
+import { UnifiedSchedulingDialog } from "@/components/UnifiedSchedulingDialog";
 
 const userColors = [
   "bg-blue-400/60 border-blue-500",
@@ -74,6 +75,9 @@ export default function TeamCalendarPage() {
   // Edit event state  
   const [editingEvent, setEditingEvent] = useState<any | null>(null);
   const [showEditEventModal, setShowEditEventModal] = useState(false);
+
+  // Unified dialog state
+  const [showUnifiedDialog, setShowUnifiedDialog] = useState(false);
 
   // Find group after hooks are initialized
   const group = groups?.find(g => g.id === teamId);
@@ -312,7 +316,7 @@ export default function TeamCalendarPage() {
         visualEnd: visualEnd
       });
       
-      setShowConfirmModal(true);
+      setShowUnifiedDialog(true);
     }
   };
   const resetDrag = () => {
@@ -786,52 +790,16 @@ export default function TeamCalendarPage() {
         initialDate={selectedDate}
       />
 
-      {/* Confirmation modal for new unavailability */}
-      <Dialog 
-        open={showConfirmModal} 
-        onOpenChange={open => { 
-          setShowConfirmModal(open); 
-          if (!open) resetDrag(); 
-        }}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader>
-            <DialogTitle>Confirm Unavailability</DialogTitle>
-            <DialogDescription>Please confirm your unavailability time slot</DialogDescription>
-          </DialogHeader>
-          <div className="py-2 text-center">
-            Add unavailability for <b>{selectedDate && format(selectedDate, 'PPP')}</b>
-            
-            <div className="font-semibold text-blue-700 text-lg mt-3 mb-3 border border-gray-200 rounded-md p-2 bg-blue-50">
-              {confirmedTimeRange && (
-                <>
-                  {(() => {
-                    const startTime = getEffectiveStartTime(confirmedTimeRange.start);
-                    const startTimeStr = timeToString(startTime.hour, startTime.minute);
-                    const endTimeStr = hourToTime(confirmedTimeRange.visualEnd ?? confirmedTimeRange.end); // Show exact selected time saved
-                    return (
-                      <>
-                        <p>From: <span className="text-black">{startTimeStr}</span></p>
-                        <p>To: <span className="text-black">{endTimeStr}</span></p>
-                      </>
-                    );
-                  })()}
-                </>
-              )}
-            </div>
-            
-            Is this correct?
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowConfirmModal(false); resetDrag(); }}>Cancel</Button>
-            <Button 
-              onClick={handleConfirmUnavailability} 
-              disabled={setUnavailability.isPending}
-            >
-              {setUnavailability.isPending ? 'Saving...' : 'Confirm'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {confirmedTimeRange && (
+        <UnifiedSchedulingDialog
+          open={showUnifiedDialog}
+          onOpenChange={setShowUnifiedDialog}
+          group={group}
+          selectedDate={selectedDate!}
+          timeRange={confirmedTimeRange}
+          onReset={resetDrag}
+        />
+      )}
 
       {/* Context Menu */}
       {contextMenu && (
