@@ -299,54 +299,99 @@ export const CreateEventDialog = ({ open, onOpenChange, group, initialDate }: Cr
           {/* Step 2: Select Date & Time */}
           {step === Step.SelectDateTime && (
             <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium mb-2 block">Select Date</Label>
-                <Calendar
-                  mode="single"
-                  selected={formData.date}
-                  onSelect={(date) => setFormData(prev => ({ ...prev, date }))}
-                  disabled={isDateDisabled}
-                  className="rounded-lg border shadow self-start"
-                />
-                {formData.date && isPastDate(formData.date) && (
-                  <Badge variant="destructive" className="mt-2">
-                    Cannot schedule events for past dates
-                  </Badge>
-                )}
-              </div>
-
-              {formData.date && !isPastDate(formData.date) && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="startTime">Start Time</Label>
-                    <Input
-                      id="startTime"
-                      type="time"
-                      value={formData.startTime}
-                      onChange={(e) => handleStartTimeChange(e.target.value)}
-                      className="mt-1"
-                      min={getMinTimeForDate(formData.date)}
-                    />
-                    {formData.startTime && isPastDateTime(formData.date, formData.startTime) && (
-                      <p className="text-xs text-red-500 mt-1">This time has already passed</p>
-                    )}
-                  </div>
-                  <div>
-                    <Label htmlFor="endTime">End Time</Label>
-                    <Input
-                      id="endTime"
-                      type="time"
-                      value={formData.endTime}
-                      onChange={(e) => handleEndTimeChange(e.target.value)}
-                      className="mt-1"
-                      min={formData.startTime || getMinTimeForDate(formData.date)}
-                    />
-                    {formData.endTime && formData.startTime && isPastDateTime(formData.date, formData.startTime) && (
-                      <p className="text-xs text-red-500 mt-1">Start time has already passed</p>
-                    )}
-                  </div>
+              <div className="flex gap-6">
+                {/* Left 50% - Calendar */}
+                <div className="flex-1 flex flex-col items-center">
+                  <h4 className="font-semibold mb-4 flex items-center gap-1">
+                    <LucideCalendar className="h-4 w-4 text-blue-500" />
+                    Select Date
+                  </h4>
+                  <Calendar
+                    mode="single"
+                    selected={formData.date}
+                    onSelect={(date) => setFormData(prev => ({ ...prev, date }))}
+                    disabled={isDateDisabled}
+                    className="rounded-lg border shadow"
+                  />
+                  {formData.date && isPastDate(formData.date) && (
+                    <Badge variant="destructive" className="mt-2">
+                      Cannot schedule events for past dates
+                    </Badge>
+                  )}
                 </div>
-              )}
+
+                {/* Right 50% - Time Selector */}
+                <div className="flex-1 flex flex-col">
+                  <h4 className="font-semibold mb-4 flex items-center gap-1">
+                    <Clock className="h-4 w-4 text-orange-500" />
+                    Select Time{formData.date ? ` for ${format(formData.date, 'MMM d')}` : ''}
+                  </h4>
+                  
+                  {formData.date && !isPastDate(formData.date) ? (
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="startTime">Start Time</Label>
+                        <Input
+                          id="startTime"
+                          type="time"
+                          value={formData.startTime}
+                          onChange={(e) => handleStartTimeChange(e.target.value)}
+                          className={`mt-1 ${
+                            formData.startTime && isPastDateTime(formData.date, formData.startTime) ? 'border-red-500' : ''
+                          }`}
+                          min={getMinTimeForDate(formData.date)}
+                        />
+                        {formData.startTime && isPastDateTime(formData.date, formData.startTime) && (
+                          <p className="text-xs text-red-500 mt-1">This time has already passed</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label htmlFor="endTime">End Time</Label>
+                        <Input
+                          id="endTime"
+                          type="time"
+                          value={formData.endTime}
+                          onChange={(e) => handleEndTimeChange(e.target.value)}
+                          className={`mt-1 ${
+                            formData.endTime && formData.startTime && formData.endTime <= formData.startTime ? 'border-red-500' : ''
+                          }`}
+                          min={formData.startTime || getMinTimeForDate(formData.date)}
+                        />
+                        {formData.endTime && formData.startTime && formData.endTime <= formData.startTime && (
+                          <p className="text-xs text-red-500 mt-1">End time must be after start time</p>
+                        )}
+                      </div>
+                      
+                      {/* Validation feedback */}
+                      {/* {(!formData.startTime || !formData.endTime || 
+                        formData.endTime <= formData.startTime ||
+                        isPastDateTime(formData.date, formData.startTime)) && (
+                        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mt-4">
+                          <p className="text-sm text-yellow-800 font-medium mb-1">Please complete:</p>
+                          <ul className="text-xs text-yellow-700 space-y-1">
+                            {!formData.startTime && <li>• Select a start time</li>}
+                            {!formData.endTime && <li>• Select an end time</li>}
+                            {formData.startTime && formData.endTime && formData.endTime <= formData.startTime && (
+                              <li>• End time must be after start time</li>
+                            )}
+                            {formData.startTime && isPastDateTime(formData.date, formData.startTime) && (
+                              <li>• Start time cannot be in the past</li>
+                            )}
+                          </ul>
+                        </div>
+                      )} */}
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex items-center justify-center text-center p-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                      <div>
+                        <Clock className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-500 font-medium">Select a date first</p>
+                        <p className="text-gray-400 text-sm mt-1">Choose a date to configure time slots</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               <div className="flex justify-between gap-2">
                 <Button variant="outline" onClick={handleBack}>Back</Button>
@@ -371,63 +416,52 @@ export const CreateEventDialog = ({ open, onOpenChange, group, initialDate }: Cr
           {step === Step.SelectParticipants && (
             <div className="space-y-4">
               <div>
-                <Label className="text-sm font-medium mb-3 block flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Select Participants
-                </Label>
-                <div className="space-y-3 max-h-64 overflow-y-auto">
+                <div className="flex items-center gap-2 mb-3">
+                  <Users className="h-5 w-5" />
+                  <h3 className="font-semibold">Select Participants</h3>
+                  <Badge variant="secondary">{formData.selectedParticipants.length} selected</Badge>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-3 max-h-64 overflow-y-auto border rounded-lg p-3">
                   {members.map((member) => {
                     const isSelected = formData.selectedParticipants.includes(member.user_id);
                     const isCurrentUser = member.user_id === user?.id;
                     
                     return (
-                      <div
-                        key={member.user_id}
-                        className={`flex items-center space-x-3 p-3 rounded-lg border transition-colors ${
-                          isSelected 
-                            ? 'bg-blue-50 border-blue-200' 
-                            : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                        }`}
-                      >
+                      <div key={member.user_id} className="flex items-center space-x-3">
                         <Checkbox
                           id={`participant-${member.user_id}`}
                           checked={isSelected}
                           onCheckedChange={() => handleParticipantToggle(member.user_id)}
                           className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                         />
-                        <Label 
+                        <label 
                           htmlFor={`participant-${member.user_id}`}
-                          className="flex-1 cursor-pointer text-sm"
+                          className="flex-1 flex items-center gap-3 cursor-pointer"
                         >
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">
-                              {member.profile?.full_name || member.profile?.email || 'Unknown User'}
-                            </span>
-                            {isCurrentUser && (
-                              <Badge variant="outline" className="text-xs">
-                                You
-                              </Badge>
-                            )}
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-medium text-blue-700">
+                            {member.profile?.full_name?.charAt(0) || member.profile?.email?.charAt(0) || 'U'}
                           </div>
-                          {member.profile?.email && member.profile?.full_name && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              {member.profile.email}
-                            </div>
-                          )}
-                        </Label>
+                          <div>
+                            <p className="font-medium text-sm">
+                              {member.profile?.full_name || 'Unknown User'}
+                              {isCurrentUser && (
+                                <Badge variant="outline" className="text-xs ml-2">
+                                  You
+                                </Badge>
+                              )}
+                            </p>
+                            <p className="text-xs text-gray-500">{member.profile?.email}</p>
+                          </div>
+                        </label>
                       </div>
                     );
                   })}
                 </div>
                 
-                <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-blue-700">
-                    <Users className="h-4 w-4" />
-                    <span className="font-medium">
-                      {formData.selectedParticipants.length} participant{formData.selectedParticipants.length !== 1 ? 's' : ''} selected
-                    </span>
-                  </div>
-                </div>
+                {formData.selectedParticipants.length === 0 && (
+                  <p className="text-xs text-red-600 mt-2">Please select at least one participant</p>
+                )}
               </div>
 
               <div className="flex justify-between gap-2">

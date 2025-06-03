@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -85,11 +84,60 @@ export const useGroups = () => {
     }
   });
 
+  const deleteGroupMutation = useMutation({
+    mutationFn: async (groupId: string) => {
+      if (!user) throw new Error('User not authenticated');
+
+      // First check if user is the owner
+      const { data: group, error: groupError } = await supabase
+        .from('groups')
+        .select('owner_id')
+        .eq('id', groupId)
+        .single();
+
+      if (groupError) throw groupError;
+      if (group.owner_id !== user.id) {
+        throw new Error('Only the group owner can delete the group');
+      }
+
+      // Delete related data first (cascade should handle this, but being explicit)
+      await supabase.from('group_members').delete().eq('group_id', groupId);
+      await supabase.from('busy').delete().eq('group_id', groupId);
+      await supabase.from('events').delete().eq('group_id', groupId);
+      await supabase.from('group_invite_links').delete().eq('group_id', groupId);
+
+      // Finally delete the group
+      const { error } = await supabase
+        .from('groups')
+        .delete()
+        .eq('id', groupId)
+        .eq('owner_id', user.id);
+
+      if (error) throw error;
+      return groupId;
+    },
+    onSuccess: (deletedGroupId) => {
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+      // Clean up any cached data for this group
+      queryClient.removeQueries({ queryKey: ['group-members', deletedGroupId] });
+      queryClient.removeQueries({ queryKey: ['events', deletedGroupId] });
+      queryClient.removeQueries({ queryKey: ['unavailability', deletedGroupId] });
+      queryClient.removeQueries({ queryKey: ['invite-link', deletedGroupId] });
+      toast.success('Group deleted successfully!');
+    },
+    onError: (error) => {
+      console.error('Error deleting group:', error);
+      toast.error('Failed to delete group');
+    }
+  });
+
   return {
     groups,
     isLoading,
     error,
     createGroup: createGroupMutation.mutate,
-    isCreating: createGroupMutation.isPending
+    deleteGroup: deleteGroupMutation.mutate,
+    isCreating: createGroupMutation.isPending,
+    isDeleting: deleteGroupMutation.isPending
   };
 };

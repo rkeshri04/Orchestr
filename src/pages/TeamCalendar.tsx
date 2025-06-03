@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { Calendar as LucideCalendar, ArrowLeft, Plus, Edit, Trash2, ChevronDown } from "lucide-react";
-import { Calendar } from "@/components/ui/calendar";
+import { Calendar as LucideCalendar, ArrowLeft, Plus, Edit, Trash2, ChevronDown, Menu, X, Users, Clock } from "lucide-react";
+import { SidebarCalender } from "@/components/ui/sidebar-calender";
 import { FullPageCalendar } from "@/components/ui/fullpage-calendar";
 import { Button } from "@/components/ui/button";
 import { useGroupMembers, useMemberUnavailability } from '@/hooks/useGroupMembers';
@@ -15,7 +15,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +47,7 @@ export default function TeamCalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDialog, setShowDialog] = useState(false);
   const [showCreateEventDialog, setShowCreateEventDialog] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const { user } = useAuth();
   const setUnavailability = useSetUnavailability();
   const deleteUnavailability = useDeleteUnavailability();
@@ -453,40 +455,217 @@ export default function TeamCalendarPage() {
     closeContextMenu();
   };
 
-  // This function is no longer needed as we use EditEventDialog now
+  // Mobile sidebar component
+  const MobileSidebar = () => (
+    <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
+      <SheetContent side="right" className="w-[320px] sm:w-[400px] p-0">
+        <SheetHeader className="px-4 py-3 border-b">
+          <SheetTitle className="text-left">Calendar Info</SheetTitle>
+        </SheetHeader>
+        <div className="flex flex-col h-full overflow-y-auto">
+          <SidebarContent />
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+
+  // Sidebar content component (reusable for both desktop and mobile)
+  const SidebarContent = () => (
+    <div className="space-y-4 p-4">
+      {/* Mini calendar */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Calendar</CardTitle>
+        </CardHeader>
+        <CardContent className="p-2">
+          <div className="w-full max-w-full overflow-hidden">
+            <SidebarCalender
+              mode="single"
+              selected={selectedDate}
+              onSelect={date => {
+                if (date) {
+                  setSelectedDate(date);
+                  setIsMobileSidebarOpen(false); // Close mobile sidebar on date select
+                }
+              }}
+              className="bg-white rounded-lg p-1 w-full [&_.rdp]:max-w-none [&_.rdp-table]:w-full [&_.rdp-cell]:text-xs [&_.rdp-day]:h-8 [&_.rdp-day]:w-8 [&_.rdp-day]:text-xs"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Team members */}
+      {members.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Team Members ({members.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3">
+            <div className="space-y-2">
+              {members.map((member, idx) => (
+                <div key={member.user_id} className="flex items-center gap-3 p-2 rounded-lg bg-gray-50">
+                  <div className={`w-4 h-4 rounded-full flex-shrink-0 ${memberColorMap[member.user_id]}`}></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {member.profile?.full_name || 'Unknown User'}
+                    </p>
+                    {member.profile?.email && (
+                      <p className="text-xs text-gray-500 truncate">
+                        {member.profile.email}
+                      </p>
+                    )}
+                  </div>
+                  {member.user_id === user?.id && (
+                    <Badge variant="outline" className="text-xs">You</Badge>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Events section */}
+      {selectedDate && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <LucideCalendar className="h-4 w-4" />
+              Events for {format(selectedDate, 'MMM d')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3">
+            <div className="space-y-3">
+              {events
+                .filter(event => {
+                  const eventDate = format(new Date(event.start_time), 'yyyy-MM-dd');
+                  return eventDate === selectedDateStr;
+                })
+                .length === 0 ? (
+                <div className="text-sm text-gray-500 text-center py-4 bg-gray-50 rounded-lg">
+                  <LucideCalendar className="h-6 w-6 text-gray-400 mx-auto mb-2" />
+                  <p>No events scheduled</p>
+                </div>
+              ) : (
+                events
+                  .filter(event => {
+                    const eventDate = format(new Date(event.start_time), 'yyyy-MM-dd');
+                    return eventDate === selectedDateStr;
+                  })
+                  .map((event, idx) => {
+                    const startTime = new Date(event.start_time);
+                    const endTime = new Date(event.end_time);
+                    return (
+                      <Card key={event.id} className="border-l-4 border-l-green-500">
+                        <CardContent className="p-3">
+                          <div className="space-y-1">
+                            <h4 className="font-medium text-sm text-green-800 flex items-center gap-2">
+                              <Clock className="h-3 w-3" />
+                              {event.title}
+                            </h4>
+                            <p className="text-xs text-green-600 font-medium">
+                              {format(startTime, 'HH:mm')} - {format(endTime, 'HH:mm')}
+                            </p>
+                            {event.description && (
+                              <p className="text-xs text-gray-600 line-clamp-2">
+                                {event.description}
+                              </p>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Unavailability summary */}
+      {selectedDate && availabilities.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Unavailability Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3">
+            <div className="space-y-2">
+              {availabilities.map((unavailability, idx) => {
+                const member = members.find(m => m.user_id === unavailability.user_id);
+                const memberName = member?.profile?.full_name || member?.profile?.email || 'Unknown';
+                const isCurrentUser = unavailability.user_id === user?.id;
+                
+                return (
+                  <div key={idx} className="flex items-center gap-2 p-2 rounded bg-gray-50">
+                    <div className={`w-3 h-3 rounded-full ${memberColorMap[unavailability.user_id]}`}></div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">
+                        {memberName} {isCurrentUser && '(You)'}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {unavailability.start_time} - {unavailability.end_time}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 
   // --- Main Render ---
   return (
     <div className="w-full h-screen flex flex-col bg-background" onClick={closeContextMenu}>
       <div className="flex items-center gap-2 p-4 border-b bg-white/80">
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)}><ArrowLeft /></Button>
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <LucideCalendar className="h-6 w-6 text-blue-500" />
-          {group?.name || 'Team'} Calendar
+        <h2 className="text-xl md:text-2xl font-bold flex items-center gap-2 flex-1 min-w-0">
+          <LucideCalendar className="h-5 w-5 md:h-6 md:w-6 text-blue-500 flex-shrink-0" />
+          <span className="truncate">{group?.name || 'Team'} Calendar</span>
         </h2>
-        <div className="flex-1" />
-        {/* Only show the button for future dates */}
-        {!isPastDate(selectedDate) && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" className="ml-2">
-                <Plus className="h-4 w-4 mr-1" /> 
-                Create
-                <ChevronDown className="h-4 w-4 ml-1" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem className="cursor-pointer" onClick={() => setShowCreateEventDialog(true)}>
-                <LucideCalendar className="h-4 w-4 mr-2" />
-                Create Event
-              </DropdownMenuItem>
-              <DropdownMenuItem className="cursor-pointer" onClick={() => setShowDialog(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Set Unavailability
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        
+        {/* Mobile sidebar trigger - only shown when date is selected */}
+        {selectedDate && (
+          <div className="md:hidden">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="mr-2"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+          </div>
         )}
+        
+        {/* Create button */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" className="flex-shrink-0">
+              <Plus className="h-4 w-4 mr-1" /> 
+              <span className="hidden sm:inline">Create</span>
+              <ChevronDown className="h-4 w-4 ml-1" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem className="cursor-pointer" onClick={() => setShowCreateEventDialog(true)}>
+              <LucideCalendar className="h-4 w-4 mr-2" />
+              Create Event
+            </DropdownMenuItem>
+            <DropdownMenuItem className="cursor-pointer" onClick={() => setShowDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Set Unavailability
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       
       {/* Container for calendar content - takes remaining screen height */}
@@ -503,27 +682,31 @@ export default function TeamCalendarPage() {
         
         {/* Time view for a specific date */}
         {selectedDate && (
-          <div className="flex flex-1 h-full gap-4">
-            {/* Time grid for selected date - 80% width */}
-            <div className="w-4/5 flex flex-col py-4 px-4">
+          <div className="flex flex-1 h-full">
+            {/* Time grid for selected date - responsive width */}
+            <div className="flex-1 lg:w-3/4 flex flex-col py-2 md:py-4 px-2 md:px-4 min-w-0">
               <div className="w-full h-full flex flex-col">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-2 md:mb-4">
                   <Button variant="outline" size="sm" onClick={() => setSelectedDate(null)}>
-                    &larr; Back to Month
+                    <ArrowLeft className="h-4 w-4 mr-1" />
+                    <span className="hidden sm:inline">Back to Month</span>
+                    <span className="sm:hidden">Back</span>
                   </Button>
-                  <h3 className="font-semibold text-lg flex items-center gap-2">
-                    {format(selectedDate, 'PPP')}
+                  <div className="flex-1 text-center">
+                    <h3 className="font-semibold text-sm md:text-lg">
+                      {format(selectedDate, 'PPP')}
+                    </h3>
                     {isPastDate(selectedDate) && (
-                      <Badge variant="secondary" className="text-xs">Past Date</Badge>
+                      <Badge variant="secondary" className="text-xs mt-1">Past Date</Badge>
                     )}
-                  </h3>
-                  <div className="w-32" />
+                  </div>
+                  <div className="w-20 md:w-32" />
                 </div>
 
-                {/* Scrollable time container with increased height */}
+                {/* Scrollable time container with responsive height */}
                 <div className="flex-1 overflow-y-auto border rounded-lg bg-white">
                   <div
-                    className={`relative h-[1200px] select-none ${
+                    className={`relative h-[800px] md:h-[1200px] select-none ${
                       isPastDate(selectedDate) ? 'opacity-75' : ''
                     }`}
                     onMouseLeave={resetDrag}
@@ -540,7 +723,7 @@ export default function TeamCalendarPage() {
                         return (
                           <div
                             key={h}
-                            className={`border-b border-dashed border-gray-200 text-xs text-gray-400 pl-2 flex items-center h-[50px] relative ${
+                            className={`border-b border-dashed border-gray-200 text-xs text-gray-400 pl-1 md:pl-2 flex items-center h-[33px] md:h-[50px] relative ${
                               !isAvailable
                                 ? 'cursor-not-allowed' 
                                 : 'cursor-pointer'
@@ -580,10 +763,10 @@ export default function TeamCalendarPage() {
                               </div>
                             )}
                             
-                            <span className={!partialAvailability.available && currentMinute === undefined ? 'text-red-400' : ''}>
+                            <span className={`text-xs ${!partialAvailability.available && currentMinute === undefined ? 'text-red-400' : ''}`}>
                               {h}:00
                               {currentMinute !== undefined && (
-                                <span className="text-green-600 ml-1 font-medium">
+                                <span className="text-green-600 ml-1 font-medium hidden sm:inline">
                                   (:{currentMinute.toString().padStart(2, '0')} now)
                                 </span>
                               )}
@@ -596,12 +779,12 @@ export default function TeamCalendarPage() {
                     {/* Show overlay message for past dates or if all remaining times are past */}
                     {(isPastDate(selectedDate) || (selectedDate && [...Array(24)].every((_, h) => isPastDateTime(selectedDate, h)))) && (
                       <div className="absolute inset-0 flex items-center justify-center bg-gray-100/50 backdrop-blur-sm z-50">
-                        <div className="text-center p-4 bg-white rounded-lg shadow border">
-                          <LucideCalendar className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                          <p className="text-gray-600 font-medium">
+                        <div className="text-center p-4 bg-white rounded-lg shadow border mx-4">
+                          <LucideCalendar className="h-6 w-6 md:h-8 md:w-8 text-gray-400 mx-auto mb-2" />
+                          <p className="text-gray-600 font-medium text-sm md:text-base">
                             {isPastDate(selectedDate) ? 'Cannot edit past dates' : 'All available times have passed'}
                           </p>
-                          <p className="text-gray-500 text-sm">
+                          <p className="text-gray-500 text-xs md:text-sm mt-1">
                             {isPastDate(selectedDate) 
                               ? 'You can view existing unavailability but cannot create new slots'
                               : 'You can view existing data but cannot create new slots for past times'
@@ -617,13 +800,15 @@ export default function TeamCalendarPage() {
                       const color = memberColorMap[unavailability.user_id] || userColors[0];
                       const isCurrentUser = unavailability.user_id === user?.id;
                       
-                      // Calculate position based on time with increased height
+                      // Calculate position based on time with responsive height
                       const startDecimal = timeToDecimal(unavailability.start_time);
                       const endDecimal = timeToDecimal(unavailability.end_time);
-                      let height = ((endDecimal - startDecimal) / 24) * 1200;
-                      // Ensure at least 1 hour block is shown
-                      if (height < 50) height = 50;
-                      const top = (startDecimal / 24) * 1200;
+                      const baseHeight = window.innerWidth < 768 ? 800 : 1200; // Responsive base height
+                      let height = ((endDecimal - startDecimal) / 24) * baseHeight;
+                      // Ensure minimum height for mobile vs desktop
+                      const minHeight = window.innerWidth < 768 ? 33 : 50;
+                      if (height < minHeight) height = minHeight;
+                      const top = (startDecimal / 24) * baseHeight;
                       
                       // Get member info for display
                       const member = members.find(m => m.user_id === unavailability.user_id);
@@ -632,12 +817,12 @@ export default function TeamCalendarPage() {
                       return (
                         <div
                           key={`${unavailability.id}-${availIndex}`}
-                          className={`${color} absolute border rounded-md flex items-center px-2 py-1 text-xs font-medium ${
+                          className={`${color} absolute border rounded-md flex items-center px-1 md:px-2 py-1 text-xs font-medium ${
                             isCurrentUser ? 'cursor-context-menu hover:opacity-90' : 'pointer-events-none'
                           }`}
                           style={{
-                            left: '60px',
-                            width: 'calc(100% - 80px)',
+                            left: window.innerWidth < 768 ? '40px' : '60px',
+                            width: window.innerWidth < 768 ? 'calc(100% - 50px)' : 'calc(100% - 80px)',
                             top: `${top}px`,
                             height: `${height}px`,
                             zIndex: 10 + memberIndex,
@@ -645,8 +830,9 @@ export default function TeamCalendarPage() {
                           }}
                           onContextMenu={e => handleUnavailabilityRightClick(e, unavailability)}
                         >
-                          <span className="truncate">
-                            {memberName}: {unavailability.start_time} - {unavailability.end_time}
+                          <span className="truncate text-xs">
+                            <span className="hidden sm:inline">{memberName}: </span>
+                            {unavailability.start_time} - {unavailability.end_time}
                           </span>
                         </div>
                       );
@@ -665,29 +851,32 @@ export default function TeamCalendarPage() {
                         const eventStartTime = new Date(event.start_time);
                         const eventEndTime = new Date(event.end_time);
                         
-                        // Calculate position based on local time 
+                        // Calculate position based on local time with responsive height
                         const startDecimal = eventStartTime.getHours() + (eventStartTime.getMinutes() / 60);
                         const endDecimal = eventEndTime.getHours() + (eventEndTime.getMinutes() / 60);
-                        const top = (startDecimal / 24) * 1200;
-                        const height = ((endDecimal - startDecimal) / 24) * 1200;
+                        const baseHeight = window.innerWidth < 768 ? 800 : 1200;
+                        const top = (startDecimal / 24) * baseHeight;
+                        const height = ((endDecimal - startDecimal) / 24) * baseHeight;
+                        const minHeight = window.innerWidth < 768 ? 30 : 40;
                         
                         return (
                           <div
                             key={`event-${event.id}-${eventIndex}`}
-                            className="absolute border-2 border-green-600 bg-green-100/90 rounded-md flex items-center px-2 py-1 text-xs font-bold text-green-800"
+                            className="absolute border-2 border-green-600 bg-green-100/90 rounded-md flex items-center px-1 md:px-2 py-1 text-xs font-bold text-green-800"
                             style={{
-                              // Uniform left and width for all rectangles
-                              left: '60px',
-                              width: 'calc(100% - 80px)',
+                              left: window.innerWidth < 768 ? '40px' : '60px',
+                              width: window.innerWidth < 768 ? 'calc(100% - 50px)' : 'calc(100% - 80px)',
                               top: `${top}px`,
-                              height: `${Math.max(height, 40)}px`,
+                              height: `${Math.max(height, minHeight)}px`,
                               zIndex: 50, // Higher z-index to appear above unavailability
                             }}
                             title={`${event.title}\n${event.description || ''}`}
-                            onContextMenu={e => handleEventRightClick(e, event)} // Add right-click handler for events
+                            onContextMenu={e => handleEventRightClick(e, event)}
                           >
-                            <span className="truncate">
-                              {event.title} ({format(eventStartTime, 'HH:mm')} - {format(eventEndTime, 'HH:mm')})
+                            <span className="truncate text-xs">
+                              <span className="hidden sm:inline">{event.title} (</span>
+                              {format(eventStartTime, 'HH:mm')} - {format(eventEndTime, 'HH:mm')}
+                              <span className="hidden sm:inline">)</span>
                             </span>
                           </div>
                         );
@@ -697,85 +886,18 @@ export default function TeamCalendarPage() {
               </div>
             </div>
             
-            {/* Right sidebar - 20% width */}
-            <div className="w-1/5 flex flex-col py-4 pr-4 space-y-6">
-              {/* Mini calendar on top */}
-              <div className="flex flex-col">
-                <h4 className="text-sm font-medium mb-2 text-gray-700">Calendar</h4>
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={date => date && setSelectedDate(date)}
-                  className="bg-white rounded-lg shadow p-2 w-full"
-                />
+            {/* Desktop Right sidebar - increased width */}
+            <div className="hidden lg:flex lg:w-1/4 lg:min-w-[320px] lg:max-w-[480px] flex-col py-4 pr-4 border-l bg-gray-50/30">
+              <div className="h-full overflow-y-auto">
+                <SidebarContent />
               </div>
-
-              {/* Team members below calendar */}
-              {members.length > 0 && (
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <h4 className="text-sm font-medium mb-3 text-gray-700">Team Members</h4>
-                  <div className="space-y-2">
-                    {members.map((member, idx) => (
-                      <div key={member.user_id} className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-sm flex-shrink-0 ${memberColorMap[member.user_id]}`}></div>
-                        <span className="text-xs truncate">
-                          {member.profile?.full_name || member.profile?.email || 'Unknown User'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Events section */}
-              {selectedDate && (
-                <div className="bg-green-50 rounded-lg p-3">
-                  <h4 className="text-sm font-medium mb-3 text-gray-700 flex items-center gap-1">
-                    📅 Events for {format(selectedDate, 'MMM d')}
-                  </h4>
-                  <div className="space-y-2">
-                    {events
-                      .filter(event => {
-                        const eventDate = format(new Date(event.start_time), 'yyyy-MM-dd');
-                        return eventDate === selectedDateStr;
-                      })
-                      .length === 0 ? (
-                      <div className="text-xs text-gray-500 italic">
-                        No events scheduled
-                      </div>
-                    ) : (
-                      events
-                        .filter(event => {
-                          const eventDate = format(new Date(event.start_time), 'yyyy-MM-dd');
-                          return eventDate === selectedDateStr;
-                        })
-                        .map((event, idx) => {
-                          const startTime = new Date(event.start_time);
-                          const endTime = new Date(event.end_time);
-                          return (
-                            <div key={event.id} className="bg-green-100 border border-green-200 rounded p-2">
-                              <div className="font-medium text-xs text-green-800 truncate">
-                                {event.title}
-                              </div>
-                              <div className="text-xs text-green-600">
-                                {format(startTime, 'HH:mm')} - {format(endTime, 'HH:mm')}
-                              </div>
-                              {event.description && (
-                                <div className="text-xs text-green-600 truncate">
-                                  {event.description}
-                                </div>
-                              )}
-                            </div>
-                        );
-                        })
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
       </div>
+      
+      {/* Mobile sidebar */}
+      <MobileSidebar />
       
       <GroupCalendarDialog
         open={showDialog}

@@ -17,13 +17,12 @@ interface GroupCalendarDialogProps {
 type TimeFrame = { start: string; end: string };
 
 enum Step {
-  SelectDate = 1,
-  AddTimeFrames = 2,
-  Review = 3,
+  SelectDateAndTime = 1,
+  Review = 2,
 }
 
 export function GroupCalendarDialog({ open, onOpenChange, group }: GroupCalendarDialogProps) {
-  const [step, setStep] = useState<Step>(Step.SelectDate);
+  const [step, setStep] = useState<Step>(Step.SelectDateAndTime);
   const [selected, setSelected] = useState<Date | undefined>(undefined);
   const { user } = useAuth();
   const { data: members = [], isLoading: loadingMembers } = useGroupMembers(group?.id);
@@ -68,12 +67,18 @@ export function GroupCalendarDialog({ open, onOpenChange, group }: GroupCalendar
     return date < today;
   };
 
-  // Step 1: Select date - only allow future dates
-  const handleDateNext = () => {
+  // Step 1: Select date and add time frames
+  const handleDateAndTimeNext = () => {
     if (selected && isPastDate(selected)) {
       return; // Prevent proceeding with past dates
     }
-    setStep(Step.AddTimeFrames);
+    if (timeFrames.some(tf => !tf.start || !tf.end)) {
+      return; // Prevent proceeding if time frames are incomplete
+    }
+    if (selected && timeFrames.some(tf => tf.start && isPastDateTime(selected, tf.start))) {
+      return; // Prevent proceeding if any time frame is in the past
+    }
+    setStep(Step.Review);
     setSaved(false);
   };
 
@@ -86,9 +91,6 @@ export function GroupCalendarDialog({ open, onOpenChange, group }: GroupCalendar
   };
   const handleTimeChange = (idx: number, field: 'start' | 'end', value: string) => {
     setTimeFrames(timeFrames.map((tf, i) => i === idx ? { ...tf, [field]: value } : tf));
-  };
-  const handleTimeFramesNext = () => {
-    setStep(Step.Review);
   };
 
   // Step 3: Review & Save
@@ -110,14 +112,14 @@ export function GroupCalendarDialog({ open, onOpenChange, group }: GroupCalendar
   };
 
   const handleBack = () => {
-    setStep(step === Step.AddTimeFrames ? Step.SelectDate : Step.AddTimeFrames);
+    setStep(Step.SelectDateAndTime);
     setSaved(false);
   };
 
   // Reset dialog state on close
   const handleDialogChange = (open: boolean) => {
     if (!open) {
-      setStep(Step.SelectDate);
+      setStep(Step.SelectDateAndTime);
       setSelected(undefined);
       setTimeFrames([{ start: '', end: '' }]);
       setSaved(false);
@@ -127,7 +129,7 @@ export function GroupCalendarDialog({ open, onOpenChange, group }: GroupCalendar
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <LucideCalendar className="h-5 w-5 text-blue-500" />
@@ -141,84 +143,98 @@ export function GroupCalendarDialog({ open, onOpenChange, group }: GroupCalendar
         <div className="flex flex-col gap-8 mt-4">
           {/* Stepper UI */}
           <div className="flex items-center gap-2 mb-2">
-            <div className={`flex items-center gap-1 ${step === Step.SelectDate ? 'font-bold text-blue-600' : 'text-gray-400'}`}>1 <span className="hidden sm:inline">Select Date</span></div>
+            <div className={`flex items-center gap-1 ${step === Step.SelectDateAndTime ? 'font-bold text-blue-600' : 'text-gray-400'}`}>
+              1 <span className="hidden sm:inline">Select Date & Time</span>
+            </div>
             <ArrowRight className="h-4 w-4 text-gray-400" />
-            <div className={`flex items-center gap-1 ${step === Step.AddTimeFrames ? 'font-bold text-blue-600' : 'text-gray-400'}`}>2 <span className="hidden sm:inline">Add Time Frames</span></div>
-            <ArrowRight className="h-4 w-4 text-gray-400" />
-            <div className={`flex items-center gap-1 ${step === Step.Review ? 'font-bold text-blue-600' : 'text-gray-400'}`}>3 <span className="hidden sm:inline">Review & Save</span></div>
+            <div className={`flex items-center gap-1 ${step === Step.Review ? 'font-bold text-blue-600' : 'text-gray-400'}`}>
+              2 <span className="hidden sm:inline">Review & Save</span>
+            </div>
           </div>
 
-          {/* Step 1: Select Date */}
-          {step === Step.SelectDate && (
+          {/* Step 1: Select Date and Add Time Frames */}
+          {step === Step.SelectDateAndTime && (
             <div className="flex flex-col gap-4">
-              <div className="text-center">
-                <Calendar
-                  mode="single"
-                  selected={selected}
-                  onSelect={setSelected}
-                  disabled={isDateDisabled}
-                  className="rounded-lg border shadow self-center"
-                />
-                {selected && isPastDate(selected) && (
-                  <Badge variant="destructive" className="mt-2">
-                    Cannot schedule unavailability for past dates
-                  </Badge>
-                )}
+              <div className="flex gap-6">
+                {/* Left 50% - Calendar */}
+                <div className="flex-1 flex flex-col items-center">
+                  <h4 className="font-semibold mb-4 flex items-center gap-1">
+                    <LucideCalendar className="h-4 w-4 text-blue-500" />
+                    Select Date
+                  </h4>
+                  <Calendar
+                    mode="single"
+                    selected={selected}
+                    onSelect={setSelected}
+                    disabled={isDateDisabled}
+                    className="rounded-lg border shadow"
+                  />
+                  {selected && isPastDate(selected) && (
+                    <Badge variant="destructive" className="mt-2">
+                      Cannot schedule unavailability for past dates
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Right 50% - Time Frames */}
+                <div className="flex-1 flex flex-col">
+                  <h4 className="font-semibold mb-4 flex items-center gap-1">
+                    <Clock className="h-4 w-4 text-orange-500" />
+                    When are you busy{selectedDate ? ` on ${selectedDate}` : ''}?
+                  </h4>
+                  <div className="space-y-3">
+                    {timeFrames.map((tf, idx) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <input
+                          type="time"
+                          value={tf.start}
+                          onChange={e => handleTimeChange(idx, 'start', e.target.value)}
+                          className="border rounded px-2 py-1 flex-1"
+                          min={selected ? getMinTimeForDate(selected) : "00:00"}
+                          disabled={!selected}
+                        />
+                        <span className="text-sm text-gray-500">to</span>
+                        <input
+                          type="time"
+                          value={tf.end}
+                          onChange={e => handleTimeChange(idx, 'end', e.target.value)}
+                          className="border rounded px-2 py-1 flex-1"
+                          min={tf.start || (selected ? getMinTimeForDate(selected) : "00:00")}
+                          disabled={!selected}
+                        />
+                        <Button 
+                          size="icon" 
+                          variant="ghost" 
+                          onClick={() => handleRemoveTimeFrame(idx)} 
+                          disabled={timeFrames.length === 1}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                        {tf.start && selected && isPastDateTime(selected, tf.start) && (
+                          <p className="text-xs text-red-500 col-span-3">This time has already passed</p>
+                        )}
+                      </div>
+                    ))}
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={handleAddTimeFrame} 
+                      className="w-full"
+                      disabled={!selected}
+                    >
+                      <Plus className="h-4 w-4 mr-1" /> Add Time Frame
+                    </Button>
+                  </div>
+                </div>
               </div>
+              
               <div className="flex justify-end gap-2">
                 <Button onClick={() => handleDialogChange(false)} variant="outline">Cancel</Button>
                 <Button 
-                  onClick={handleDateNext} 
-                  disabled={!selected || isPastDate(selected)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Add Time Frames */}
-          {step === Step.AddTimeFrames && (
-            <div className="flex flex-col gap-4">
-              <div>
-                <h4 className="font-semibold mb-2 flex items-center gap-1">
-                  <Clock className="h-4 w-4 text-orange-500" />
-                  When are you busy on {selectedDate}?
-                </h4>
-                {timeFrames.map((tf, idx) => (
-                  <div key={idx} className="flex gap-2 items-center mb-2">
-                    <input
-                      type="time"
-                      value={tf.start}
-                      onChange={e => handleTimeChange(idx, 'start', e.target.value)}
-                      className="border rounded px-2 py-1"
-                      min={selected ? getMinTimeForDate(selected) : "00:00"}
-                    />
-                    <span>to</span>
-                    <input
-                      type="time"
-                      value={tf.end}
-                      onChange={e => handleTimeChange(idx, 'end', e.target.value)}
-                      className="border rounded px-2 py-1"
-                      min={tf.start || (selected ? getMinTimeForDate(selected) : "00:00")}
-                    />
-                    <Button size="icon" variant="ghost" onClick={() => handleRemoveTimeFrame(idx)} disabled={timeFrames.length === 1}>
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                    {tf.start && selected && isPastDateTime(selected, tf.start) && (
-                      <p className="text-xs text-red-500 col-span-3">This time has already passed</p>
-                    )}
-                  </div>
-                ))}
-                <Button size="sm" variant="outline" onClick={handleAddTimeFrame} className="mt-2">
-                  <Plus className="h-4 w-4 mr-1" /> Add Time Frame
-                </Button>
-              </div>
-              <div className="flex justify-between gap-2">
-                <Button onClick={handleBack} variant="outline">Back</Button>
-                <Button 
-                  onClick={handleTimeFramesNext} 
+                  onClick={handleDateAndTimeNext} 
                   disabled={
+                    !selected || 
+                    isPastDate(selected) ||
                     timeFrames.some(tf => !tf.start || !tf.end) ||
                     (selected && timeFrames.some(tf => tf.start && isPastDateTime(selected, tf.start)))
                   }
@@ -229,7 +245,7 @@ export function GroupCalendarDialog({ open, onOpenChange, group }: GroupCalendar
             </div>
           )}
 
-          {/* Step 3: Review & Save */}
+          {/* Step 2: Review & Save */}
           {step === Step.Review && (
             <div className="flex flex-col gap-4">
               <div>

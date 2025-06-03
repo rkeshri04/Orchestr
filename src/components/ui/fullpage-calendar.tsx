@@ -23,24 +23,24 @@ function FullPageCalendar({
         root: "w-full h-full flex flex-col items-stretch",
         months: "flex w-full h-full justify-center items-center",
         month: "w-full h-full flex flex-col",
-        caption: "flex justify-center py-4 mb-4 relative items-center",
-        caption_label: "text-xl font-medium",
-        nav: "space-x-2 flex items-center",
+        caption: "flex justify-center py-2 sm:py-4 mb-2 sm:mb-4 relative items-center",
+        caption_label: "text-lg sm:text-xl font-medium",
+        nav: "space-x-1 sm:space-x-2 flex items-center",
         nav_button: cn(
           buttonVariants({ variant: "ghost" }),
-          "h-10 w-10 bg-transparent p-0 opacity-70 hover:opacity-100"
+          "h-8 w-8 sm:h-10 sm:w-10 bg-transparent p-0 opacity-70 hover:opacity-100"
         ),
-        nav_button_previous: "absolute left-4",
-        nav_button_next: "absolute right-4",
+        nav_button_previous: "absolute left-2 sm:left-4",
+        nav_button_next: "absolute right-2 sm:right-4",
         table: "w-full h-full border-collapse flex flex-col flex-1",
-        head_row: "flex w-full h-14",
+        head_row: "flex w-full h-10 sm:h-14",
         head_cell:
-          "text-lg font-medium text-gray-600 uppercase flex-1 flex items-center justify-center",
+          "text-sm sm:text-lg font-medium text-gray-600 uppercase flex-1 flex items-center justify-center px-1",
         row: "flex w-full flex-1",
-        cell: "flex-1 flex items-center justify-center p-1",
+        cell: "flex-1 flex items-center justify-center p-0.5 sm:p-1 min-w-0",
         day: cn(
           buttonVariants({ variant: "ghost" }),
-          "h-16 w-16 flex items-center justify-center text-lg rounded-md hover:bg-gray-100 p-0 font-medium aria-selected:opacity-100"
+          "h-10 w-10 sm:h-16 sm:w-16 flex items-center justify-center text-sm sm:text-lg rounded-md hover:bg-gray-100 p-0 font-medium aria-selected:opacity-100 min-w-0 flex-shrink-0"
         ),
         day_range_end: "day-range-end",
         day_selected:
@@ -55,8 +55,8 @@ function FullPageCalendar({
         ...classNames,
       }}
       components={{
-        IconLeft: ({ ..._props }) => <ChevronLeft className="h-5 w-5" />,
-        IconRight: ({ ..._props }) => <ChevronRight className="h-5 w-5" />,
+        IconLeft: ({ ..._props }) => <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />,
+        IconRight: ({ ..._props }) => <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />,
       }}
       {...props}
     />

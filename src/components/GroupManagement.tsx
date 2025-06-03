@@ -11,7 +11,7 @@ import { GroupSettingsDialog } from "@/components/GroupSettingsDialog";
 import { useNavigate } from "react-router-dom";
 
 export const GroupManagement = () => {
-  const { groups, isLoading, createGroup, isCreating } = useGroups();
+  const { groups, isLoading, createGroup, isCreating, deleteGroup, isDeleting } = useGroups();
   const [selectedGroup, setSelectedGroup] = useState<any | null>(null);
   const [selectedGroupForSettings, setSelectedGroupForSettings] = useState<any | null>(null);
   const [showTeamCalendar, setShowTeamCalendar] = useState(false);
